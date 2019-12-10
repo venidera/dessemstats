@@ -35,10 +35,11 @@ Estrutura de diretórios e arquivos:
 ## Development and Tests
 
 ### 1. Cloning the repository
-The first step aims to clone the `dessemstats` repository from Bitbucket. It is possible to change the current working directory to the location where you want the cloned directory to be made.
+The first step aims to clone the `dessemstats` repository from Bitbucket. It is possible to change the current working directory to the location where you want the cloned directory to be made. Note that `{my.bitbucket.username}` below must be replaced with your bitbucket username.
+
 ```bash
 $ mkdir ~/git
-$ git clone https://git@bitbucket.org:venidera-edp/dessemstats.git ~/git/dessemstats
+$ git clone https://{my.bitbucket.username}@bitbucket.org/venidera_edp/dessemstats.git ~/git/dessemstats
 $ cd ~/git/dessemstats
 ```
 
@@ -75,7 +76,7 @@ To run your package (and also to generate a script that helps other developers t
 
 ## Troubleshooting
 
-Please file a BitBucket issue to [report a bug](https://bitbucket.org/venidera/data-models/issues?status=new&status=open).
+Please file a BitBucket issue to [report a bug](https://bitbucket.org/venidera_edp/dessemstats/issues?status=new&status=open).
 
 ## Maintainers
 

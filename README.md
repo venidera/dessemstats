@@ -48,8 +48,8 @@ $ cd ~/git/dessemstats
 ```bash
 $ /usr/bin/python3.6 -m venv --prompt="dessemstats" venv
 $ source venv/bin/activate
-(project) $ pip install --upgrade setuptools pip
-(project) $ python setup.py install
+(dessemstats) $ pip install --upgrade setuptools pip
+(dessemstats) $ python setup.py install
 ```
 
 ### 3. Code checking
@@ -63,7 +63,7 @@ Pylint is a tool that tries to enforce a coding standard and looks for  [code sm
 ### 4. Testing package modules
 Python tests are Python classes that reside in separate files from the code being tested. In this project, module tests are based on Python `unittest` package and are located in the `tests` directory. They can be run by the following code: 
 ```bash
-(project) $ python setup.py test
+(dessemstats) $ python setup.py test
 ```
 In general, the developer can create and perform as many tests as he needs. However, it is important to validate them before committing a new change to the Bitbucket Cloud, as a way of avoiding errors. It is also important to mention that tests will only be performed if test classes extend the `unittest.TestCase` object.
 
@@ -71,7 +71,7 @@ In general, the developer can create and perform as many tests as he needs. Howe
 ### 5. Running the application
 To run your package (and also to generate a script that helps other developers to execute your package), put your package's execution routines into `scripts/run.py` directory. Then, once package syntax is following Venidera code standards and all tests were performed, you can run the application by executing the following code:
 ```bash
-(project) $ python scripts/run.py
+(dessemstats) $ python scripts/run.py
 ```
 
 ## Troubleshooting

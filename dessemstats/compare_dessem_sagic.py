@@ -16,6 +16,7 @@ import statistics
 from math import sqrt
 from os import path
 import tempfile
+import getpass
 from shutil import rmtree
 import pickle
 from joblib import Parallel, delayed
@@ -63,11 +64,11 @@ COMPARE_PLANTS = ['ITAIPU',
 DECK_PROVIDER = 'ons'
 
 # dados para coneccao:
-# TODO: Fix remote access to data:
+# Acesso remoto - ainda precisa ser ajustado para dados privados do ONS:
 # SERVER = 'https://miran-api.venidera.net'
 SERVER = '192.168.1.10'
 USERNAME = input('Por favor, digite o email do usuario: ')
-PASSWORD = input('Por favor, digite a senha: ')
+PASSWORD = getpass.getpass('Por favor, digite a senha: ', stream=None)
 # SERVER_PORT = '9090'
 
 

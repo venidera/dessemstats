@@ -44,8 +44,8 @@ logging.getLogger().addHandler(CONSOLE)
 # CURRENT_DATE = LOCALDATETIME.date().isoformat()
 
 # definindo data de inicio e final da comparacao
-INI_DATE = datetime(2019, 6, 1)
-END_DATE = datetime(2019, 11, 30)
+INI_DATE = datetime(2019, 9, 1)
+END_DATE = datetime(2019, 10, 31)
 
 # para comparar apenas um subconjunto de plantas:
 # COMPARE_PLANTS = ['A. VERMELHA',
@@ -55,7 +55,8 @@ END_DATE = datetime(2019, 11, 30)
 #                   'FUNIL-GRANDE']
 COMPARE_PLANTS = ['ITAIPU',
                   'A. VERMELHA',
-                  'SLT.SANTIAGO']
+                  'P. PECEM I',
+                  'LAJEADO']
 # para comparar todas as plantas:
 # COMPARE_PLANTS = []
 

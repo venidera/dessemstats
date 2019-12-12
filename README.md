@@ -35,11 +35,11 @@ Estrutura de diretórios e arquivos:
 ## Development and Tests
 
 ### 1. Cloning the repository
-The first step aims to clone the `dessemstats` repository from Bitbucket. It is possible to change the current working directory to the location where you want the cloned directory to be made. Note that `{my.bitbucket.username}` below must be replaced with your bitbucket username.
+The first step aims to clone the `dessemstats` repository from GitHub. It is possible to change the current working directory to the location where you want the cloned directory to be made.
 
 ```bash
 $ mkdir ~/git
-$ git clone https://{my.bitbucket.username}@bitbucket.org/venidera_edp/dessemstats.git ~/git/dessemstats
+$ git clone https://github.com/venidera/dessemstats.git ~/git/dessemstats
 $ cd ~/git/dessemstats
 ```
 
@@ -65,7 +65,7 @@ Python tests are Python classes that reside in separate files from the code bein
 ```bash
 (dessemstats) $ python setup.py test
 ```
-In general, the developer can create and perform as many tests as he needs. However, it is important to validate them before committing a new change to the Bitbucket Cloud, as a way of avoiding errors. It is also important to mention that tests will only be performed if test classes extend the `unittest.TestCase` object.
+In general, the developer can create and perform as many tests as he needs. However, it is important to validate them before committing a new change to the GitHub Cloud, as a way of avoiding errors. It is also important to mention that tests will only be performed if test classes extend the `unittest.TestCase` object.
 
 
 ### 5. Running the application
@@ -76,7 +76,7 @@ To run your package (and also to generate a script that helps other developers t
 
 ## Troubleshooting
 
-Please file a BitBucket issue to [report a bug](https://bitbucket.org/venidera_edp/dessemstats/issues?status=new&status=open).
+Please file a GitHub issue to [report a bug](https://github.com/venidera/dessemstats/issues).
 
 ## Maintainers
 

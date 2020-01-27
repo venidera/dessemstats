@@ -112,8 +112,9 @@ def query_installed_capacity(params):
     deck = dessem2dicts(fn=filepath, dia=11, rd=False)
     installed_capacity = dict()
     reservoir_volume = dict()
-    key = list(deck)[0]
-    for uhe in deck[key][False]['hidr']['UHE']:
+    key_date = list(deck)[0]
+    key_rd = list(deck[key_date])[0]
+    for uhe in deck[key_date][key_rd]['hidr']['UHE']:
         if uhe['nome'] not in params['dessem_sagic_name'][
                 'hidraulica']['dessem']:
             continue
@@ -127,8 +128,9 @@ def query_installed_capacity(params):
         sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
         installed_capacity[sagic_name] = total_capacity
         reservoir_volume[sagic_name] = uhe['volMax'] - uhe['volMin']
-    for uhe_desc, uhe_data in zip(deck[key][False]['termdat']['CADUSIT'],
-                                  deck[key][False]['termdat']['CADUNIDT']):
+    for uhe_desc, uhe_data in zip(
+            deck[key_date][key_rd]['termdat']['CADUSIT'],
+            deck[key_date][key_rd]['termdat']['CADUNIDT']):
         if uhe_desc['nomeUsina'] not in params[
                 'dessem_sagic_name']['termica']['dessem']:
             continue

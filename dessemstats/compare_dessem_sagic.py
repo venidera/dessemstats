@@ -43,54 +43,34 @@ logging.getLogger().addHandler(CONSOLE)
 # LOCALDATETIME = datetime.today()
 # CURRENT_DATE = LOCALDATETIME.date().isoformat()
 
-# definindo data de inicio e final da comparacao
-INI_DATE = datetime(2019, 9, 1)
-END_DATE = datetime(2019, 10, 31)
 
-# para comparar apenas um subconjunto de plantas:
-# COMPARE_PLANTS = ['A. VERMELHA',
-#                   'SLT.SANTIAGO',
-#                   'QUEBRA QUEIX',
-#                   'SALTO',
-#                   'FUNIL-GRANDE']
-COMPARE_PLANTS = ['ITAIPU',
-                  'A. VERMELHA',
-                  'P. PECEM I',
-                  'LAJEADO']
-# para comparar todas as plantas:
-# COMPARE_PLANTS = []
-
-# provedor doss decks:
-# DECK_PROVIDER = 'ccee'
-DECK_PROVIDER = 'ons'
-
-# dados para coneccao:
-# Acesso remoto - ainda precisa ser ajustado para dados privados do ONS:
-# SERVER = 'https://miran-api.venidera.net'
-SERVER = '192.168.1.10'
-USERNAME = input('Por favor, digite o email do usuario: ')
-PASSWORD = getpass.getpass('Por favor, digite a senha: ', stream=None)
-# SERVER_PORT = '9090'
+def load_files(params):
+    """ Carrega os arquivos necessarios para o processo """
+    con = params['con']
+    dessem_sagic_file = con.download_file(oid='file8884_1781',
+                                          pto=params['tmp_folder'])
+    with open(dessem_sagic_file, 'r') as myfile:
+        dessem_sagic_name = load(myfile)
+    params['dessem_sagic_name'] = dessem_sagic_name
+    query_file = con.download_file(oid='file5155_8795',
+                                   pto=params['tmp_folder'])
+    with open(query_file, 'r') as myfile:
+        query_template_str = Template(myfile.read())
+    params['query_template_str'] = query_template_str
 
 
-CON = Connection(server=SERVER)
-CON.do_login(username=USERNAME,
-             password=PASSWORD)
+def connect_miran(params):
+    """ Conecta na plataforma Miran e retorna o objeto de coneccao """
+    con = Connection(server=params['server'],
+                     port=params['port'])
+    con.do_login(username=params['username'],
+                 password=params['password'])
+    params['con'] = con
 
-TMP_FOLDER = tempfile.mkdtemp() + '/'
-DESSEM_SAGIC_FILE = CON.download_file(oid='file8884_1781', pto=TMP_FOLDER)
-with open(DESSEM_SAGIC_FILE, 'r') as myfile:
-    DESSEM_SAGIC_NAME = load(myfile)
-QUERY_FILE = CON.download_file(oid='file5155_8795', pto=TMP_FOLDER)
-with open(QUERY_FILE, 'r') as myfile:
-    QUERY_TEMPLATE_STR = Template(myfile.read())
-logging.info('Deleting temporary files in %s ...', TMP_FOLDER)
-rmtree(TMP_FOLDER)
-
-def __return_ts_points(cur_date_str, gen_type, dessem_name):
+def __return_ts_points(cur_date_str, gen_type, dessem_name, params):
     """ Retorna series de geracao e volume inicial para um gerador """
     ts_gen = '%s_%s_%s_ger%s_%s_%s_%s' % (
-        'ts_' + DECK_PROVIDER + '_dessem_completo',
+        'ts_' + params['deck_provider'] + '_dessem_completo',
         cur_date_str.replace('-', '_'),
         'com_rede_pdo_operacao_interval',
         gen_type[:4],
@@ -98,35 +78,38 @@ def __return_ts_points(cur_date_str, gen_type, dessem_name):
         'geracao',
         gen_type)
     ts_vol = '%s_%s_%s_bal%s_%s_%s' % (
-        'ts_' + DECK_PROVIDER + '_dessem_completo',
+        'ts_' + params['deck_provider'] + '_dessem_completo',
         cur_date_str.replace('-', '_'),
         'com_rede_pdo_operacao_interval',
         gen_type[:4],
         dessem_name,
         'volini')
-    gen_ts = CON.get_timeseries(params={'name': ts_gen})
+    con = params['con']
+    gen_ts = con.get_timeseries(params={'name': ts_gen})
     if not gen_ts:
         logging.error('Error retrieving timeseries for: %s', ts_gen)
         gen_points = None
     else:
-        gen_points = CON.get_points(oid=gen_ts[0]['tsid'],
+        gen_points = con.get_points(oid=gen_ts[0]['tsid'],
                                     params={'tstype': 'int'})
         #raise Exception(dumps(gen_points))
-    vol_ts = CON.get_timeseries(params={'name': ts_vol})
+    vol_ts = con.get_timeseries(params={'name': ts_vol})
     if not vol_ts:
         logging.error('Error retrieving timeseries for: %s', ts_vol)
         vol_points = None
     else:
-        vol_points = CON.get_points(oid=vol_ts[0]['tsid'],
+        vol_points = con.get_points(oid=vol_ts[0]['tsid'],
                                     params={'tstype': 'int'})
     return gen_points, vol_points
 
 
-def query_installed_capacity():
+def query_installed_capacity(params):
     """ Retorna a capacidade instalada e volume do reservatorio para
         todas as plantas hidreletricas """
-    tmp_folder = tempfile.mkdtemp() + '/'
-    filepath = CON.download_file(oid='file3884_4468', pto=tmp_folder)
+    if not params['normalize']:
+        return dict(), dict()
+    con = params['con']
+    filepath = con.download_file(oid='file9878_2277', pto=params['tmp_folder'])
     deck = dessem2dicts(
         fn=filepath,
         dia=11,
@@ -135,29 +118,30 @@ def query_installed_capacity():
     reservoir_volume = dict()
     key = list(deck.keys())[0]
     for uhe in deck[key][True]['hidr']['UHE']:
-        if uhe['nome'] not in DESSEM_SAGIC_NAME['hidraulica']['dessem']:
+        if uhe['nome'] not in params['dessem_sagic_name'][
+                'hidraulica']['dessem']:
             continue
         total_capacity = 0
         for num_units, capacity in zip(uhe['numUG'], uhe['potencia']):
             total_capacity += num_units * capacity
-        idx = DESSEM_SAGIC_NAME['hidraulica']['dessem'].index(uhe['nome'])
-        s_name = DESSEM_SAGIC_NAME['hidraulica']['sagic'][idx]
+        idx = params['dessem_sagic_name'][
+            'hidraulica']['dessem'].index(uhe['nome'])
+        s_name = params['dessem_sagic_name']['hidraulica']['sagic'][idx]
         sagic_name = re.sub(r'_P$', '', s_name)
         sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
         installed_capacity[sagic_name] = total_capacity
         reservoir_volume[sagic_name] = uhe['volMax'] - uhe['volMin']
     for uhe_desc, uhe_data in zip(deck[key][True]['termdat']['CADUSIT'],
                                   deck[key][True]['termdat']['CADUNIDT']):
-        if uhe_desc['nomeUsina'] not in DESSEM_SAGIC_NAME['termica']['dessem']:
+        if uhe_desc['nomeUsina'] not in params[
+                'dessem_sagic_name']['termica']['dessem']:
             continue
-        idx = DESSEM_SAGIC_NAME['termica']['dessem'].index(
+        idx = params['dessem_sagic_name']['termica']['dessem'].index(
             uhe_desc['nomeUsina'])
-        s_name = DESSEM_SAGIC_NAME['termica']['sagic'][idx]
+        s_name = params['dessem_sagic_name']['termica']['sagic'][idx]
         sagic_name = re.sub(r'_P$', '', s_name)
         sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
         installed_capacity[sagic_name] = uhe_data['capacidade']
-    logging.info('Deleting temporary files in %s ...', TMP_FOLDER)
-    rmtree(tmp_folder)
     return installed_capacity, reservoir_volume
 
 
@@ -207,7 +191,7 @@ def build_compare_dict(grp, dados, sagic_name):
                 dados[sagic_name][cur_date]['dessem'][
                     pair[0]] = pair[1]
 
-def query_compare_data(params):
+def query_compare_data(pparams):
     """ Faz consulta do Miran Web que retorna geracao horaria verificada e
         programada (SAGIC) e geracao programada do DESSEM. As series sao
         indexadas por dia, sendo que em cada dia sao armazenadas series
@@ -215,7 +199,7 @@ def query_compare_data(params):
         variaveis citadas. Note que o dicionario 'dados' eh um ponteiro
         e eh organizado/indexado de tal forma que ele pode e eh alimentado
         por n threads de consultas simultaneas """
-    cur_date, next_date, gen_type, dados, d_name, s_name = params
+    params, cur_date, next_date, gen_type, dados, d_name, s_name = pparams
     start = cur_date.isoformat()
     end = next_date.isoformat()
     cur_date = cur_date.date()
@@ -225,13 +209,17 @@ def query_compare_data(params):
     logging.debug('Querying plant: %s', sagic_name)
     if sagic_name not in dados:
         dados[sagic_name] = dict()
-    query = QUERY_TEMPLATE_STR.substitute(deck_provider=DECK_PROVIDER,
-                                          sagic_name=sagic_name,
-                                          dessem_name=dessem_name,
-                                          gen_type=gen_type,
-                                          yyyy_mm=cur_date.strftime('%Y_%m'))
+    query = params['query_template_str'].substitute(
+        deck_provider=params['deck_provider'],
+        sagic_name=sagic_name,
+        dessem_name=dessem_name,
+        gen_type=gen_type,
+        yyyy_mm=cur_date.strftime('%Y_%m'))
     query = loads(query)
-    resp = CON.consulta_miran_web(data=query)
+    query['intervals']['date_ini'] = start
+    query['intervals']['date_fin'] = end
+    con = params['con']
+    resp = con.consulta_miran_web(data=query)
     if resp:
         for grp in query['consults']:
             grp['results'] = dict(
@@ -241,7 +229,7 @@ def query_compare_data(params):
                        'end': end,
                        'timeseries': ltimeseries}
             try:
-                respts = CON.get_timeseries_sum(data=payload)
+                respts = con.get_timeseries_sum(data=payload)
             except AssertionError as ass_err:
                 respts = None
                 logging.error('%s. %s: %s. %s: %s. %s: %s',
@@ -261,12 +249,15 @@ def query_compare_data(params):
                               'dessem_name', dessem_name,
                               'current_date', cur_date.strftime('%m/%Y'),
                               dumps(respts))
+    else:
+        logging.critical('Failed to evaluate query: %s', dumps(query))
+        # raise Exception('Fatal error. Unable to process query. Aborting.')
     return True
 
 
-def query_complete_data(params):
+def query_complete_data(pparams):
     """ Consulta dados de geracao e volume inicial por dia operativo """
-    cur_date, gen_type, dados, d_name, s_name = params
+    params, cur_date, gen_type, dados, d_name, s_name = pparams
     cur_date_str = cur_date.isoformat()
     dessem_name = re.sub(r'[\W]+', '_', d_name).lower()
     sagic_name = re.sub(r'_P$', '', s_name)
@@ -276,7 +267,8 @@ def query_complete_data(params):
         dados[sagic_name] = dict()
     gen_points, vol_points = __return_ts_points(cur_date_str,
                                                 gen_type,
-                                                dessem_name)
+                                                dessem_name,
+                                                params)
     if cur_date not in dados[sagic_name]:
         dados[sagic_name][cur_date] = dict()
         dados[sagic_name][cur_date]['dessem_gen'] = dict()
@@ -292,50 +284,52 @@ def query_complete_data(params):
     return True
 
 
-def process_compare_data():
+def process_compare_data(params):
     """ Processa dados para comparacao entre DESSEM e SAGIC """
     dados = dict()
-    for cur_date in rrule(MONTHLY, dtstart=INI_DATE, until=END_DATE):
+    for cur_date in rrule(MONTHLY, dtstart=params['ini_date'],
+                          until=params['end_date']):
         next_date = cur_date + relativedelta(
             months=1) - relativedelta(minutes=1)
         logging.info('Querying: cur_date: %s; next_date: %s',
                      cur_date.date().isoformat(),
                      next_date.date().isoformat())
-        for gen_type in DESSEM_SAGIC_NAME:
-            dessem_names = DESSEM_SAGIC_NAME[gen_type]['dessem']
-            sagic_names = DESSEM_SAGIC_NAME[gen_type]['sagic']
-            params = list()
+        for gen_type in params['dessem_sagic_name']:
+            dessem_names = params['dessem_sagic_name'][gen_type]['dessem']
+            sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
+            pparams = list()
             for d_name, s_name in zip(dessem_names, sagic_names):
-                if (COMPARE_PLANTS and
-                        d_name not in COMPARE_PLANTS):
+                if (params['compare_plants'] and
+                        d_name not in params['compare_plants']):
                     continue
-                params.append((cur_date, next_date, gen_type,
+                pparams.append((params, cur_date, next_date, gen_type,
                                dados, d_name, s_name))
-            results = Parallel(n_jobs=4, verbose=10, backend="threading")(
-                map(delayed(query_compare_data), params))
+            results = Parallel(n_jobs=5, verbose=10, backend="threading")(
+                map(delayed(query_compare_data), pparams))
             if not all(results):
                 logging.warning('Not all parallel jobs were successful!')
     return dados
 
 
-def process_ts_data():
+def process_ts_data(params):
     """ Processa series temporais utilizadas
         para calcular estatisticas do DESSEM """
     dados = dict()
-    for cur_date in rrule(DAILY, dtstart=INI_DATE, until=END_DATE):
+    for cur_date in rrule(DAILY, dtstart=params['ini_date'],
+                          until=params['end_date']):
         logging.info('Querying: cur_date: %s', cur_date.date().isoformat())
-        for gen_type in DESSEM_SAGIC_NAME:
-            dessem_names = DESSEM_SAGIC_NAME[gen_type]['dessem']
-            sagic_names = DESSEM_SAGIC_NAME[gen_type]['sagic']
-            params = list()
+        for gen_type in params['dessem_sagic_name']:
+            dessem_names = params['dessem_sagic_name'][gen_type]['dessem']
+            sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
+            pparams = list()
             for d_name, s_name in zip(dessem_names, sagic_names):
-                if (COMPARE_PLANTS and
-                        d_name not in COMPARE_PLANTS):
+                if (params['compare_plants'] and
+                        d_name not in params['compare_plants']):
                     continue
-                params.append((cur_date.date(), gen_type,
+                pparams.append((params, cur_date.date(), gen_type,
                                dados, d_name, s_name))
-            results = Parallel(n_jobs=4, verbose=10, backend="threading")(
-                map(delayed(query_complete_data), params))
+            results = Parallel(n_jobs=5, verbose=10, backend="threading")(
+                map(delayed(query_complete_data), pparams))
             if not all(results):
                 logging.warning('Not all parellel jobs were successful!')
     return dados
@@ -448,11 +442,11 @@ def calculate_dessem_statistics(dados, sagic_name, dessem_var,
             sqrt(abs(diff_squared)) / reservoir_volume[sagic_name]
 
 
-def build_gen_dict():
+def build_gen_dict(params):
     """ Constroi um dicionario com a lista de geradores e seus tipos """
     sagic_gen_type = dict()
-    for gen_type in DESSEM_SAGIC_NAME:
-        sagic_names = DESSEM_SAGIC_NAME[gen_type]['sagic']
+    for gen_type in params['dessem_sagic_name']:
+        sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
         for s_name in sagic_names:
             sagic_name = re.sub(r'_P$', '', s_name)
             sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
@@ -460,22 +454,22 @@ def build_gen_dict():
     return sagic_gen_type
 
 
-def do_compare(force_process=False, normalize=False):
+def do_compare(params):
     """ Calcula indicadores de comparacao entre SAGIC e DESSEM """
-    if path.exists('compare_sagic.pickle') and not force_process:
+    if path.exists('compare_sagic.pickle') and not params['force_process']:
         with open('compare_sagic.pickle', 'rb') as handle:
             dados = pickle.load(handle)
         data_loaded = True
     else:
         data_loaded = False
-        dados = process_compare_data()
+        dados = process_compare_data(params)
     if not data_loaded:
         with open('compare_sagic.pickle', 'wb') as handle:
             pickle.dump(dados, handle, protocol=pickle.HIGHEST_PROTOCOL)
     compare = [('programada', 'verificada'),
                ('programada', 'dessem'),
                ('dessem', 'verificada')]
-    installed_capicity, _ = query_installed_capacity()
+    installed_capicity, _ = query_installed_capacity(params)
     logging.info('Calculating Statistics...')
     for sagic_name in dados:
         for cur_date in dados[sagic_name]:
@@ -486,30 +480,31 @@ def do_compare(force_process=False, normalize=False):
                             comp_series[1]]) >= 24):
                     calculate_statistics(comp_series, dados, sagic_name,
                                          cur_date, installed_capicity,
-                                         normalize)
+                                         params['normalize'])
     if not data_loaded:
         with open('compare_sagic.pickle', 'wb') as handle:
             pickle.dump(dados, handle, protocol=pickle.HIGHEST_PROTOCOL)
     return dados
 
 
-def do_ts_dessem(force_process=False, normalize=False):
+def do_ts_dessem(params):
     """ Calcula as estatisticas das series temporais do DESSEM """
-    if path.exists('compare_sagic_ts_dessem.pickle') and not force_process:
+    if (path.exists('compare_sagic_ts_dessem.pickle') and
+            not params['force_process']):
         with open('compare_sagic_ts_dessem.pickle', 'rb') as handle:
             dados = pickle.load(handle)
         data_loaded = True
     else:
         data_loaded = False
-        dados = process_ts_data()
+        dados = process_ts_data(params)
     if not data_loaded:
         with open('compare_sagic_ts_dessem.pickle', 'wb') as handle:
             pickle.dump(dados, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    installed_capicity, reservoir_volume = query_installed_capacity()
+    installed_capicity, reservoir_volume = query_installed_capacity(params)
     logging.info('Calculating Statistics...')
     for sagic_name in dados:
         for cur_date in dados[sagic_name]:
-            if cur_date >= END_DATE.date():
+            if cur_date >= params['end_date'].date():
                 continue
             next_date = cur_date + relativedelta(days=1)
             for dessem_var in ['dessem_gen', 'dessem_vol']:
@@ -519,7 +514,8 @@ def do_ts_dessem(force_process=False, normalize=False):
                             dessem_var]) > 24):
                     calculate_dessem_statistics(dados, sagic_name, dessem_var,
                                                 cur_date, installed_capicity,
-                                                reservoir_volume, normalize)
+                                                reservoir_volume,
+                                                params['normalize'])
     if not data_loaded:
         with open('compare_sagic_ts_dessem.pickle', 'wb') as handle:
             pickle.dump(dados, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -581,9 +577,12 @@ def write_xlsx(data, filename='output.xlsx'):
     logging.info('Finished outputting data into workbook: %s', filename)
 
 
-def wrapup_compare(force_process=False, normalize=False):
+def wrapup_compare(params):
     """ Empacota os resultados de comparacao entre SAGIC e DESSEM """
-    dados = do_compare(force_process=force_process, normalize=normalize)
+    connect_miran(params)
+    params['tmp_folder'] = tempfile.mkdtemp() + '/'
+    load_files(params)
+    dados = do_compare(params=params)
     metrics = dict()
     dates = dict()
     for sagic_name in dados:
@@ -591,7 +590,7 @@ def wrapup_compare(force_process=False, normalize=False):
             dates[cur_date] = cur_date
             for metric in dados[sagic_name][cur_date]:
                 metrics[metric] = metric
-    # sagic_gen_type = build_gen_dict()
+    # sagic_gen_type = build_gen_dict(params)
     time_series = dict()
     existing_dates = list(dates)
     existing_dates.sort()
@@ -618,13 +617,18 @@ def wrapup_compare(force_process=False, normalize=False):
             time_series[sagic_name].append(cur_date_data)
     logging.info('Outputting to excel: sagic_statistics.xlsx')
     write_xlsx(data=time_series, filename='sagic_statistics.xlsx')
+    logging.info('Deleting temporary files in %s ...', params['tmp_folder'])
+    rmtree(params['tmp_folder'])
     logging.info('Finished!')
     return dados
 
 
-def wrapup_ts_dessem(force_process=False, normalize=False):
+def wrapup_ts_dessem(params):
     """ Empacota os  resultados das estatisticas das series do DESSEM """
-    dados = do_ts_dessem(force_process=force_process, normalize=normalize)
+    connect_miran(params)
+    params['tmp_folder'] = tempfile.mkdtemp() + '/'
+    load_files(params)
+    dados = do_ts_dessem(params=params)
     metrics = dict()
     dates = dict()
     for sagic_name in dados:
@@ -632,7 +636,7 @@ def wrapup_ts_dessem(force_process=False, normalize=False):
             dates[cur_date] = cur_date
             for metric in dados[sagic_name][cur_date]:
                 metrics[metric] = metric
-    # sagic_gen_type = build_gen_dict()
+    # sagic_gen_type = build_gen_dict(params)
     time_series = dict()
     existing_dates = list(dates)
     existing_dates.sort()
@@ -658,5 +662,7 @@ def wrapup_ts_dessem(force_process=False, normalize=False):
             time_series[sagic_name].append(cur_date_data)
     logging.info('Outputting to excel: dessem_statistics.xlsx')
     write_xlsx(data=time_series, filename='dessem_statistics.xlsx')
+    logging.info('Deleting temporary files in %s ...', params['tmp_folder'])
+    rmtree(params['tmp_folder'])
     logging.info('Finished!')
     return dados

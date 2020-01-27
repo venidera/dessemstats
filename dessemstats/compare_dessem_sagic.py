@@ -110,10 +110,7 @@ def query_installed_capacity(params):
         return dict(), dict()
     con = params['con']
     filepath = con.download_file(oid='file9878_2277', pto=params['tmp_folder'])
-    deck = dessem2dicts(
-        fn=filepath,
-        dia=11,
-        rd=True)
+    deck = dessem2dicts(fn=filepath, dia=11, rd=True)
     installed_capacity = dict()
     reservoir_volume = dict()
     key = list(deck.keys())[0]

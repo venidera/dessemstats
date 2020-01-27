@@ -31,6 +31,7 @@ END_DATE = datetime(2020, 1, 24)
 #                   'SAO MANOEL',
 #                   'P. PECEM I',
 #                   'LAJEADO']
+COMPARE_PLANTS = ['A. VERMELHA']
 # para comparar todas as plantas:
 COMPARE_PLANTS = []
 
@@ -38,7 +39,7 @@ COMPARE_PLANTS = []
 # DECK_PROVIDER = 'ccee'
 DECK_PROVIDER = 'ons'
 FORCE_PROCESS = True
-NORMALIZE = False
+NORMALIZE = True
 
 # dados para coneccao:
 # Acesso remoto - ainda precisa ser ajustado para dados privados do ONS:

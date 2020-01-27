@@ -31,7 +31,7 @@ END_DATE = datetime(2020, 1, 24)
 #                   'SAO MANOEL',
 #                   'P. PECEM I',
 #                   'LAJEADO']
-COMPARE_PLANTS = ['A. VERMELHA']
+# COMPARE_PLANTS = ['A. VERMELHA']
 # para comparar todas as plantas:
 COMPARE_PLANTS = []
 

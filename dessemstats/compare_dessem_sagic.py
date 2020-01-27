@@ -16,7 +16,6 @@ import statistics
 from math import sqrt
 from os import path
 import tempfile
-import getpass
 from shutil import rmtree
 import pickle
 from joblib import Parallel, delayed
@@ -110,11 +109,11 @@ def query_installed_capacity(params):
         return dict(), dict()
     con = params['con']
     filepath = con.download_file(oid='file9878_2277', pto=params['tmp_folder'])
-    deck = dessem2dicts(fn=filepath, dia=11, rd=True)
+    deck = dessem2dicts(fn=filepath, dia=11, rd=False)
     installed_capacity = dict()
     reservoir_volume = dict()
-    key = list(deck.keys())[0]
-    for uhe in deck[key][True]['hidr']['UHE']:
+    key = list(deck)[0]
+    for uhe in deck[key][False]['hidr']['UHE']:
         if uhe['nome'] not in params['dessem_sagic_name'][
                 'hidraulica']['dessem']:
             continue
@@ -128,8 +127,8 @@ def query_installed_capacity(params):
         sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
         installed_capacity[sagic_name] = total_capacity
         reservoir_volume[sagic_name] = uhe['volMax'] - uhe['volMin']
-    for uhe_desc, uhe_data in zip(deck[key][True]['termdat']['CADUSIT'],
-                                  deck[key][True]['termdat']['CADUNIDT']):
+    for uhe_desc, uhe_data in zip(deck[key][False]['termdat']['CADUSIT'],
+                                  deck[key][False]['termdat']['CADUNIDT']):
         if uhe_desc['nomeUsina'] not in params[
                 'dessem_sagic_name']['termica']['dessem']:
             continue
@@ -300,7 +299,7 @@ def process_compare_data(params):
                         d_name not in params['compare_plants']):
                     continue
                 pparams.append((params, cur_date, next_date, gen_type,
-                               dados, d_name, s_name))
+                                dados, d_name, s_name))
             results = Parallel(n_jobs=5, verbose=10, backend="threading")(
                 map(delayed(query_compare_data), pparams))
             if not all(results):
@@ -324,7 +323,7 @@ def process_ts_data(params):
                         d_name not in params['compare_plants']):
                     continue
                 pparams.append((params, cur_date.date(), gen_type,
-                               dados, d_name, s_name))
+                                dados, d_name, s_name))
             results = Parallel(n_jobs=5, verbose=10, backend="threading")(
                 map(delayed(query_complete_data), pparams))
             if not all(results):
@@ -391,15 +390,17 @@ def calculate_statistics(comp_series, dados, sagic_name,
         statistics.mean(j_volat) / cur_capacity
     dados[sagic_name][cur_date][
         'desviopadrao_diffs_%s_%s' % comp_series] = statistics.stdev(
-            diffs)
+            diffs) / cur_capacity
     dados[sagic_name][cur_date][
-        'desviopadrao_%s' % comp_series[0]] = statistics.stdev(i_list)
+        'desviopadrao_%s' % comp_series[0]] = statistics.stdev(
+            i_list) / cur_capacity
     dados[sagic_name][cur_date][
-        'desviopadrao_%s' % comp_series[1]] = statistics.stdev(j_list)
+        'desviopadrao_%s' % comp_series[1]] = statistics.stdev(
+            j_list) / cur_capacity
     dados[sagic_name][cur_date][
-        'desviopadrao_%s_%s' % comp_series] = dados[sagic_name][cur_date][
+        'desviopadrao_%s_%s' % comp_series] = (dados[sagic_name][cur_date][
             'desviopadrao_%s' % comp_series[0]] - dados[sagic_name][
-                cur_date]['desviopadrao_%s' % comp_series[1]]
+                cur_date]['desviopadrao_%s' % comp_series[1]]) / cur_capacity
 
 
 def calculate_dessem_statistics(dados, sagic_name, dessem_var,

@@ -25,15 +25,14 @@ END_DATE = datetime(2020, 1, 24)
 #                   'SALTO',
 #                   'FUNIL-GRANDE']
 # subconjunto de plantas para o workshop de 28/01/2020
-# COMPARE_PLANTS = ['ITAIPU',
-#                   'A. VERMELHA',
-#                   'CACH.CALDEIR',
-#                   'SAO MANOEL',
-#                   'P. PECEM I',
-#                   'LAJEADO']
+COMPARE_PLANTS = ['A. VERMELHA',
+                  'CACH.CALDEIR',
+                  'SAO MANOEL',
+                  'P. PECEM I',
+                  'LAJEADO']
 # COMPARE_PLANTS = ['A. VERMELHA']
 # para comparar todas as plantas:
-COMPARE_PLANTS = []
+# COMPARE_PLANTS = []
 
 # provedor doss decks:
 # DECK_PROVIDER = 'ccee'

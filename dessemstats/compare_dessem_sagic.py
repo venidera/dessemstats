@@ -302,7 +302,7 @@ def process_compare_data(params):
                     continue
                 pparams.append((params, cur_date, next_date, gen_type,
                                 dados, d_name, s_name))
-            results = Parallel(n_jobs=5, verbose=10, backend="threading")(
+            results = Parallel(n_jobs=10, verbose=10, backend="threading")(
                 map(delayed(query_compare_data), pparams))
             if not all(results):
                 logging.warning('Not all parallel jobs were successful!')
@@ -326,7 +326,7 @@ def process_ts_data(params):
                     continue
                 pparams.append((params, cur_date.date(), gen_type,
                                 dados, d_name, s_name))
-            results = Parallel(n_jobs=5, verbose=10, backend="threading")(
+            results = Parallel(n_jobs=10, verbose=10, backend="threading")(
                 map(delayed(query_complete_data), pparams))
             if not all(results):
                 logging.warning('Not all parellel jobs were successful!')

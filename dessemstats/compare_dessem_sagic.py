@@ -13,7 +13,7 @@ import re
 import logging
 import locale
 import statistics
-from math import sqrt
+from math import sqrt, log
 from os import path
 import tempfile
 from shutil import rmtree
@@ -109,6 +109,7 @@ def query_installed_capacity(params):
         return dict(), dict()
     con = params['con']
     filepath = con.download_file(oid='file9878_2277', pto=params['tmp_folder'])
+    print(filepath)
     deck = dessem2dicts(fn=filepath, dia=11, rd=False)
     installed_capacity = dict()
     reservoir_volume = dict()
@@ -340,11 +341,14 @@ def calculate_statistics(comp_series, dados, sagic_name,
                   comp_series[0], comp_series[1],
                   sagic_name, cur_date.isoformat())
     diffs = list()
-    diffs_squared = list()
-    timestamps = set(
+    diffs_abs = list()
+    i_logs = list()
+    j_logs = list()
+    timestamps = list(set(
         dados[sagic_name][cur_date][comp_series[0]]
         ).intersection(
-            set(dados[sagic_name][cur_date][comp_series[1]]))
+            set(dados[sagic_name][cur_date][comp_series[1]])))
+    timestamps.sort()
     i_list = list()
     j_list = list()
     prev_tstamp = None
@@ -356,12 +360,20 @@ def calculate_statistics(comp_series, dados, sagic_name,
         j = dados[sagic_name][cur_date][comp_series[1]][tstamp]
         j_list.append(j)
         diffs.append(j - i)
-        diffs_squared.append((j - i)*(j - i))
+        diffs_abs.append(abs(j - i))
         if prev_tstamp:
-            i_volat.append(abs(
-                i - dados[sagic_name][cur_date][comp_series[0]][prev_tstamp]))
-            j_volat.append(abs(
-                j - dados[sagic_name][cur_date][comp_series[1]][prev_tstamp]))
+            i_prev = dados[sagic_name][cur_date][comp_series[0]][prev_tstamp]
+            j_prev = dados[sagic_name][cur_date][comp_series[1]][prev_tstamp]
+            i_volat.append(abs(i - i_prev))
+            j_volat.append(abs(j - j_prev))
+            if i and i_prev:
+                i_logs.append(log(i / i_prev))
+            else:
+                i_logs.append(0)
+            if j and j_prev:
+                j_logs.append(log(j / j_prev))
+            else:
+                j_logs.append(0)
         prev_tstamp = tstamp
     cur_capacity = 1
     if sagic_name in installed_capacity and normalize:
@@ -374,7 +386,7 @@ def calculate_statistics(comp_series, dados, sagic_name,
         sum(diffs) / (num_values * cur_capacity)
     dados[sagic_name][cur_date][
         'desvio_absoluto_%s_%s' % comp_series] =\
-        sqrt(abs(sum(diffs_squared))) / (
+        sum(diffs_abs) / (
             num_values * cur_capacity)
     dados[sagic_name][cur_date][
         'oscilacao_maxima_norm_%s' % comp_series[0]] =\
@@ -390,6 +402,12 @@ def calculate_statistics(comp_series, dados, sagic_name,
     dados[sagic_name][cur_date][
         'volatilidade_media_%s' % comp_series[1]] =\
         statistics.mean(j_volat) / cur_capacity
+    dados[sagic_name][cur_date][
+        'volatilidade_log_%s' % comp_series[0]] =\
+        statistics.stdev(i_logs)
+    dados[sagic_name][cur_date][
+        'volatilidade_log_%s' % comp_series[1]] =\
+        statistics.stdev(j_logs)
     dados[sagic_name][cur_date][
         'desviopadrao_diffs_%s_%s' % comp_series] = statistics.stdev(
             diffs) / cur_capacity
@@ -567,7 +585,7 @@ def write_xlsx(data, filename='output.xlsx'):
                         worksheet.write(row+1, col, dumps(datai[key]))
                     elif isinstance(datai[key], date):
                         worksheet.write(row+1, col, datai[key],
-                                        fmt['br_date'])
+                                        fmt['br_datetime'])
                     elif isinstance(datai[key], datetime):
                         worksheet.write(row+1, col, datai[key],
                                         fmt['br_datetime'])
@@ -585,13 +603,25 @@ def wrapup_compare(params):
     dados = do_compare(params=params)
     metrics = dict()
     dates = dict()
+    time_series = dict()
     for sagic_name in dados:
         for cur_date in dados[sagic_name]:
             dates[cur_date] = cur_date
             for metric in dados[sagic_name][cur_date]:
                 metrics[metric] = metric
+                if metric in ['dessem', 'verificada', 'programada']:
+                    if '%s_%s' % (sagic_name, metric) not in time_series:
+                        time_series['%s_%s' %
+                                    (sagic_name, metric)] = list()
+                    for tstamp in dados[sagic_name][cur_date][metric]:
+                        cur_date_data = dict()
+                        cur_date_data['Data'] = datetime.fromtimestamp(
+                            int(tstamp/1000))
+                        cur_date_data[metric] = dados[sagic_name][
+                            cur_date][metric][tstamp]
+                        time_series['%s_%s' %
+                                    (sagic_name, metric)].append(cur_date_data)
     # sagic_gen_type = build_gen_dict(params)
-    time_series = dict()
     existing_dates = list(dates)
     existing_dates.sort()
     del metrics['dessem']

@@ -16,7 +16,7 @@ import dessemstats.compare_dessem_sagic as compare
     ********************************************"""
 # definindo data de inicio e final da comparacao
 INI_DATE = datetime(2019, 1, 1)
-END_DATE = datetime(2020, 1, 24)
+END_DATE = datetime(2020, 5, 15)
 
 # para comparar apenas um subconjunto de plantas:
 # COMPARE_PLANTS = ['A. VERMELHA',
@@ -37,7 +37,7 @@ COMPARE_PLANTS = []
 # provedor doss decks:
 # DECK_PROVIDER = 'ccee'
 DECK_PROVIDER = 'ons'
-FORCE_PROCESS = True
+FORCE_PROCESS = False
 NORMALIZE = True
 
 # dados para coneccao:
@@ -65,5 +65,7 @@ PARAMS = {'ini_date': INI_DATE,
 
     ********************************************"""
 
-# DADOS_DESSEM = compare.wrapup_ts_dessem(params=PARAMS)
-DADOS_COMPARE = compare.wrapup_compare(params=PARAMS)
+# compare.wrapup_ts_dessem(params=PARAMS)
+# DADOS_DESSEM = compare.DADOS_DESSEM
+compare.wrapup_compare(params=PARAMS)
+DADOS_COMPARE = compare.DADOS_COMPARE

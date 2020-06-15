@@ -178,6 +178,14 @@ def write_load_wind_csv(con, ini_datetime, end_datetime, dest_path):
         ts_prefix='ts_ons_geracao_horaria_programada_eolica',
         suffix='eolica_programada')
     data_fields += tnames
+    data, tnames = query_hourly_subsis_sagic(
+        con,
+        ini_datetime,
+        end_datetime,
+        data,
+        ts_prefix='ts_ons_geracao_horaria_verificada_eolica',
+        suffix='eolica_verificada')
+    data_fields += tnames
     data_fields = list(set(data_fields))
     data_fields.sort()
     dtimes = list(data)

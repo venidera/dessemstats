@@ -17,9 +17,10 @@ import dessemstats.compare_dessem_sagic as compare
 
 # definindo data de inicio e final da comparacao
 END_DATE = datetime.now()
-END_DATE = datetime(END_DATE.year, END_DATE.month, END_DATE.day)
+END_DATE = datetime(END_DATE.year, END_DATE.month + 1, 1) - timedelta(days=1)
 # END_DATE = END_DATE - timedelta(days=1)
-INI_DATE = END_DATE - timedelta(days=60)
+INI_DATE = END_DATE - timedelta(days=45)
+INI_DATE = datetime(INI_DATE.year, INI_DATE.month, 1)
 
 # para comparar apenas um subconjunto de plantas:
 # COMPARE_PLANTS = ['A. VERMELHA',

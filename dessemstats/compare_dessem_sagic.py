@@ -5,8 +5,7 @@ Proprietary and confidential
 Written by Marcos Leone Filho <marcos@venidera.com>
 """
 
-from string import Template
-from json import load, loads, dumps
+from json import loads, dumps
 from datetime import datetime, date
 from time import mktime
 import re
@@ -15,19 +14,18 @@ import locale
 import statistics
 from math import sqrt, log
 from os import path
-import tempfile
-from shutil import rmtree
 import pickle
 from joblib import Parallel, delayed
-# import pytz
+import pytz
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY
 import xlsxwriter
 from deckparser.dessem2dicts import load_dessem
-from barrel_client import Connection
+from dessemstats.interface import load_files, connect_miran
+from dessemstats.interface import write_pld_csv, write_load_wind_csv
 
 locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
-# local_timezone = pytz.timezone('America/Sao_Paulo')
+LOCAL_TIMEZONE = pytz.timezone('America/Sao_Paulo')
 # utc_timezone = pytz.timezone('UTC')
 CONSOLE = logging.StreamHandler()
 CONSOLE.setFormatter(
@@ -44,34 +42,6 @@ logging.getLogger().addHandler(CONSOLE)
 
 DADOS_COMPARE = dict()
 DADOS_DESSEM = dict()
-
-def load_files(params):
-    """ Carrega os arquivos necessarios para o processo """
-    con = params['con']
-    dessem_sagic_file = con.download_file(oid='file8884_1781',
-                                          pto=params['tmp_folder'])
-    with open(dessem_sagic_file, 'r') as myfile:
-        dessem_sagic_name = load(myfile)
-    params['dessem_sagic_name'] = dessem_sagic_name
-    query_file = con.download_file(oid='file5155_8795',
-                                   pto=params['tmp_folder'])
-    with open(query_file, 'r') as myfile:
-        query_template_str = Template(myfile.read())
-    params['query_template_str'] = query_template_str
-    query_file = con.download_file(oid='file5963_1735',
-                                   pto=params['tmp_folder'])
-    with open(query_file, 'r') as myfile:
-        query_template_str = Template(myfile.read())
-    params['query_cmo_template_str'] = query_template_str
-
-
-def connect_miran(params):
-    """ Conecta na plataforma Miran e retorna o objeto de coneccao """
-    con = Connection(server=params['server'],
-                     port=params['port'])
-    con.do_login(username=params['username'],
-                 password=params['password'])
-    params['con'] = con
 
 def __return_ts_points(cur_date_str, gen_type, dessem_name, params):
     """ Retorna series de geracao e volume inicial para um gerador """
@@ -115,7 +85,11 @@ def query_installed_capacity(params):
     if not params['normalize']:
         return dict(), dict()
     con = params['con']
-    filepath = con.download_file(oid='file5939_287', pto=params['tmp_folder'])
+    res = con.get_file(oid='file5939_287')
+    filepath = params['storage_folder'] + '/' + res['name']
+    if not path.exists(filepath):
+        filepath = con.download_file(oid='file5939_287',
+                                     pto=params['storage_folder'])
     rootpath = path.dirname(path.realpath(filepath))
     logging.debug('DESSEM deck downloaded: %s', filepath)
     deck = load_dessem(rootpath,
@@ -175,7 +149,8 @@ def build_compare_dict(grp, sagic_name, subsis):
             for pair in grp[
                     'results_timeseries'][
                         'timeseries_sum']:
-                cur_date = datetime.fromtimestamp(pair[0]/1000).date()
+                cur_date = datetime.fromtimestamp(pair[0]/1000,
+                                                  tz=LOCAL_TIMEZONE).date()
                 if cur_date not in DADOS_COMPARE[sagic_name]:
                     DADOS_COMPARE[sagic_name][cur_date] = dict()
                     DADOS_COMPARE[sagic_name][cur_date]['programada'] = dict()
@@ -189,7 +164,8 @@ def build_compare_dict(grp, sagic_name, subsis):
         for pair in grp[
                 'results_timeseries'][
                     'timeseries_sum']:
-            cur_date = datetime.fromtimestamp(pair[0]/1000).date()
+            cur_date = datetime.fromtimestamp(pair[0]/1000,
+                                              tz=LOCAL_TIMEZONE).date()
             if cur_date not in DADOS_COMPARE[sagic_name]:
                 DADOS_COMPARE[sagic_name][cur_date] = dict()
             if subsis not in DADOS_COMPARE[sagic_name][cur_date]:
@@ -637,11 +613,103 @@ def write_xlsx(data, filename='output.xlsx'):
     workbook.close()
     logging.info('Finished outputting data into workbook: %s', filename)
 
+def __write_cmo_csv(dest_path):
+    """ writes cmo to csv """
+    tstamp_dict = dict()
+    for dtime in DADOS_COMPARE['cmo']:
+        for data_type in ['s', 'se', 'ne', 'n']:
+            if data_type not in DADOS_COMPARE['cmo'][dtime]:
+                continue
+            for tstamp in DADOS_COMPARE['cmo'][dtime][data_type]:
+                if tstamp not in tstamp_dict:
+                    tstamp_dict[tstamp] = dict()
+                tstamp_dict[tstamp][data_type] = DADOS_COMPARE[
+                    'cmo'][dtime][data_type][tstamp]
+    tstamp_index = list(tstamp_dict)
+    tstamp_index.sort()
+    for i, tstamp in enumerate(tstamp_index):
+        for data_type in ['s', 'se', 'ne', 'n']:
+            if data_type not in tstamp_dict[tstamp]:
+                if i - 1 >= 0 and data_type in tstamp_dict[
+                        tstamp_index[i - 1]]:
+                    tstamp_dict[tstamp][
+                        data_type] = tstamp_dict[
+                            tstamp_index[i - 1]][data_type]
+                else:
+                    tstamp_dict[tstamp][
+                        data_type] = 0
+    dest_file = dest_path + '/' + 'cmo.csv'
+    with open(dest_file, 'w') as cur_file:
+        cur_file.write('%s,%s,%s,%s,%s\n' %
+                       ('datetime',
+                        's',
+                        'se',
+                        'ne',
+                        'n'))
+        for tstamp in tstamp_index:
+            dtime = datetime.fromtimestamp(int(tstamp/1000),
+                                           tz=LOCAL_TIMEZONE)
+            cur_file.write('%s,%f,%f,%f,%f\n' %
+                           (dtime.isoformat(),
+                            tstamp_dict[tstamp]['s'],
+                            tstamp_dict[tstamp]['se'],
+                            tstamp_dict[tstamp]['ne'],
+                            tstamp_dict[tstamp]['n']))
+    logging.info('Finished outputting data into csv file: %s', dest_file)
+
+def __write_gen_csv(plant, dest_path):
+    """ writes generation to csv """
+    tstamp_dict = dict()
+    for dtime in DADOS_COMPARE[plant]:
+        for data_type in ['verificada', 'programada', 'dessem']:
+            if data_type not in DADOS_COMPARE[plant][dtime]:
+                continue
+            for tstamp in DADOS_COMPARE[plant][dtime][data_type]:
+                if tstamp not in tstamp_dict:
+                    tstamp_dict[tstamp] = dict()
+                tstamp_dict[tstamp][data_type] = DADOS_COMPARE[
+                    plant][dtime][data_type][tstamp]
+    tstamp_index = list(tstamp_dict)
+    tstamp_index.sort()
+    for i, tstamp in enumerate(tstamp_index):
+        for data_type in ['verificada', 'programada', 'dessem']:
+            if data_type not in tstamp_dict[tstamp]:
+                if i - 1 >= 0 and data_type in tstamp_dict[
+                        tstamp_index[i - 1]]:
+                    tstamp_dict[tstamp][
+                        data_type] = tstamp_dict[
+                            tstamp_index[i - 1]][data_type]
+                else:
+                    tstamp_dict[tstamp][
+                        data_type] = 0
+    dest_file = dest_path + '/' + plant + '.csv'
+    with open(dest_file, 'w') as cur_file:
+        cur_file.write('%s,%s,%s,%s\n' %
+                       ('datetime',
+                        'dessem',
+                        'verificada',
+                        'programada'))
+        for tstamp in tstamp_index:
+            dtime = datetime.fromtimestamp(int(tstamp/1000),
+                                           tz=LOCAL_TIMEZONE)
+            cur_file.write('%s,%f,%f,%f\n' %
+                           (dtime.isoformat(),
+                            tstamp_dict[tstamp]['dessem'],
+                            tstamp_dict[tstamp]['verificada'],
+                            tstamp_dict[tstamp]['programada']))
+    logging.info('Finished outputting data into csv file: %s', dest_file)
+
+def write_csv(dest_path='/tmp/'):
+    """ outputs data to individual files as specified by EDP """
+    for plant in DADOS_COMPARE:
+        if plant == 'cmo':
+            __write_cmo_csv(dest_path)
+        else:
+            __write_gen_csv(plant, dest_path)
 
 def wrapup_compare(params):
     """ Empacota os resultados de comparacao entre SAGIC e DESSEM """
     connect_miran(params)
-    params['tmp_folder'] = tempfile.mkdtemp() + '/'
     load_files(params)
     do_compare(params=params)
     metrics = dict()
@@ -722,15 +790,21 @@ def wrapup_compare(params):
             time_series[sagic_name].append(cur_date_data)
     logging.info('Outputting to excel: sagic_statistics.xlsx')
     write_xlsx(data=time_series, filename='sagic_statistics.xlsx')
-    logging.info('Deleting temporary files in %s ...', params['tmp_folder'])
-    rmtree(params['tmp_folder'])
+    write_csv(dest_path=params['storage_folder'])
+    write_pld_csv(params['con'],
+                  params['ini_date'],
+                  params['end_date'],
+                  params['storage_folder'])
+    write_load_wind_csv(params['con'],
+                        params['ini_date'],
+                        params['end_date'],
+                        params['storage_folder'])
     logging.info('Finished!')
 
 
 def wrapup_ts_dessem(params):
     """ Empacota os  resultados das estatisticas das series do DESSEM """
     connect_miran(params)
-    params['tmp_folder'] = tempfile.mkdtemp() + '/'
     load_files(params)
     do_ts_dessem(params=params)
     metrics = dict()
@@ -766,6 +840,4 @@ def wrapup_ts_dessem(params):
             time_series[sagic_name].append(cur_date_data)
     logging.info('Outputting to excel: dessem_statistics.xlsx')
     write_xlsx(data=time_series, filename='dessem_statistics.xlsx')
-    logging.info('Deleting temporary files in %s ...', params['tmp_folder'])
-    rmtree(params['tmp_folder'])
     logging.info('Finished!')

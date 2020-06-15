@@ -5,18 +5,21 @@ Proprietary and confidential
 Written by Marcos Leone Filho <marcos@venidera.com>
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import getpass
+import os
 import dessemstats.compare_dessem_sagic as compare
 
 
-""" ********************************************
-    Definicao dos parametros basicos de execucao
+# ********************************************
+# Definicao dos parametros basicos de execucao
+# ********************************************
 
-    ********************************************"""
 # definindo data de inicio e final da comparacao
-INI_DATE = datetime(2019, 1, 1)
-END_DATE = datetime(2020, 5, 15)
+END_DATE = datetime.now()
+END_DATE = datetime(END_DATE.year, END_DATE.month, END_DATE.day)
+# END_DATE = END_DATE - timedelta(days=1)
+INI_DATE = END_DATE - timedelta(days=60)
 
 # para comparar apenas um subconjunto de plantas:
 # COMPARE_PLANTS = ['A. VERMELHA',
@@ -37,16 +40,22 @@ COMPARE_PLANTS = []
 # provedor doss decks:
 # DECK_PROVIDER = 'ccee'
 DECK_PROVIDER = 'ons'
-FORCE_PROCESS = False
+FORCE_PROCESS = True
 NORMALIZE = True
+STORAGE_FOLDER = os.getenv('HOME') + '/tmp/edp/'
+if not os.path.exists(STORAGE_FOLDER):
+    os.makedirs(STORAGE_FOLDER)
 
 # dados para coneccao:
 # Acesso remoto - ainda precisa ser ajustado para dados privados do ONS:
 # SERVER = 'https://miran-api.venidera.net'
 SERVER = 'miran-barrel.venidera.net'
 PORT = 9090
-USERNAME = input('Por favor, digite o email do usuario: ')
-PASSWORD = getpass.getpass('Por favor, digite a senha: ', stream=None)
+USERNAME = os.getenv('USERNAME')
+PASSWORD = os.getenv('PASSWORD')
+if not USERNAME or not PASSWORD:
+    USERNAME = input('Por favor, digite o email do usuario: ')
+    PASSWORD = getpass.getpass('Por favor, digite a senha: ', stream=None)
 # SERVER_PORT = '9090'
 
 PARAMS = {'ini_date': INI_DATE,
@@ -58,7 +67,8 @@ PARAMS = {'ini_date': INI_DATE,
           'username': USERNAME,
           'password': PASSWORD,
           'force_process': FORCE_PROCESS,
-          'normalize': NORMALIZE}
+          'normalize': NORMALIZE,
+          'storage_folder': STORAGE_FOLDER}
 
 """ ********************************************
     Executando script:

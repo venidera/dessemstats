@@ -190,6 +190,7 @@ def query_compare_data(pparams):
     sagic_name = re.sub(r'_P$', '', s_name)
     sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
     logging.debug('Querying plant: %s', sagic_name)
+    con = params['con']
     if sagic_name not in DADOS_COMPARE:
         DADOS_COMPARE[sagic_name] = dict()
     if sagic_name == 'cmo':
@@ -198,16 +199,33 @@ def query_compare_data(pparams):
             subsis=dessem_name,
             yyyy_mm=cur_date.strftime('%Y_%m'))
     else:
+        new_ts_name = 'ts_ons_geracao_horaria_verificada_%s_' % sagic_name
+        res = con.get_tags(params={'q': new_ts_name + '*'})
+        new_sagic_name = ''
+        if res:
+            for cur_tag in res:
+                if new_ts_name in cur_tag['name']:
+                    cur_ts = con.get_timeseries(
+                        params={'name': cur_tag['name']})
+                    if not cur_ts:
+                        continue
+                    cur_pts = con.get_points(oid=cur_ts[0]['tsid'])
+                    if not cur_pts['points_returned']:
+                        continue
+                    new_sagic_name = cur_tag['name'].replace(
+                        'ts_ons_geracao_horaria_verificada_', '')
+                    break
+        if not new_sagic_name:
+            new_sagic_name = sagic_name
         query = params['query_template_str'].substitute(
             deck_provider=params['deck_provider'],
-            sagic_name=sagic_name,
+            sagic_name=new_sagic_name,
             dessem_name=dessem_name,
             gen_type=gen_type,
             yyyy_mm=cur_date.strftime('%Y_%m'))
     query = loads(query)
     query['intervals']['date_ini'] = start
     query['intervals']['date_fin'] = end
-    con = params['con']
     resp = con.consulta_miran_web(data=query)
     if resp:
         for grp in query['consults']:

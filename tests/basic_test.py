@@ -7,9 +7,13 @@ Written by Marcos Leone Filho <marcos@venidera.com>
 
 import unittest
 from datetime import datetime
+import os
 import getpass
 import dessemstats.compare_dessem_sagic as compare
 
+STORAGE_FOLDER = os.getenv('HOME') + '/tmp/edp/'
+if not os.path.exists(STORAGE_FOLDER):
+    os.makedirs(STORAGE_FOLDER)
 
 class TestCompare(unittest.TestCase):
     """ Teste basico de sanidade"""
@@ -26,7 +30,8 @@ class TestCompare(unittest.TestCase):
                   'username': username,
                   'password': password,
                   'force_process': True,
-                  'normalize': True}
+                  'normalize': True,
+                  'storage_folder': STORAGE_FOLDER}
         compare.wrapup_compare(params=params)
         dados_compare = compare.DADOS_COMPARE
         self.assertIsInstance(dados_compare, dict,

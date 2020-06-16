@@ -26,18 +26,18 @@ def load_files(params):
     with open(dessem_sagic_file, 'r') as myfile:
         dessem_sagic_name = load(myfile)
     params['dessem_sagic_name'] = dessem_sagic_name
-    res = con.get_file(oid='file5155_8795')
+    res = con.get_file(oid='file6093_3674')
     query_file = params['storage_folder'] + '/' + res['name']
     if not path.exists(query_file):
-        query_file = con.download_file(oid='file5155_8795',
+        query_file = con.download_file(oid='file6093_3674',
                                        pto=params['storage_folder'])
     with open(query_file, 'r') as myfile:
         query_template_str = Template(myfile.read())
     params['query_template_str'] = query_template_str
-    res = con.get_file(oid='file5963_1735')
+    res = con.get_file(oid='file2666_8636')
     query_file = params['storage_folder'] + '/' + res['name']
     if not path.exists(query_file):
-        query_file = con.download_file(oid='file5963_1735',
+        query_file = con.download_file(oid='file2666_8636',
                                        pto=params['storage_folder'])
     with open(query_file, 'r') as myfile:
         query_template_str = Template(myfile.read())
@@ -150,42 +150,45 @@ def query_hourly_subsis_sagic(
             data[dtime][subsis] = value
     return data, list(tseries)
 
-def write_load_wind_csv(con, ini_datetime, end_datetime, dest_path):
+def write_load_wind_csv(con, ini_datetime, end_datetime, dest_path,
+                        query_load, query_wind):
     """ outputs ons load (verified and predicted) to csv """
     data = dict()
     data_fields = list()
-    data, tnames = query_hourly_subsis_sagic(
-        con,
-        ini_datetime,
-        end_datetime,
-        data,
-        ts_prefix='ts_ons_carga_horaria_programada',
-        suffix='carga_programada')
-    data_fields += tnames
-    data, tnames = query_hourly_subsis_sagic(
-        con,
-        ini_datetime,
-        end_datetime,
-        data,
-        ts_prefix='ts_ons_carga_horaria_verificada',
-        suffix='carga_verificada')
-    data_fields += tnames
-    data, tnames = query_hourly_subsis_sagic(
-        con,
-        ini_datetime,
-        end_datetime,
-        data,
-        ts_prefix='ts_ons_geracao_horaria_programada_eolica',
-        suffix='eolica_programada')
-    data_fields += tnames
-    data, tnames = query_hourly_subsis_sagic(
-        con,
-        ini_datetime,
-        end_datetime,
-        data,
-        ts_prefix='ts_ons_geracao_horaria_verificada_eolica',
-        suffix='eolica_verificada')
-    data_fields += tnames
+    if query_load:
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_carga_horaria_programada',
+            suffix='carga_programada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_carga_horaria_verificada',
+            suffix='carga_verificada')
+        data_fields += tnames
+    if query_wind:
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_programada_eolica',
+            suffix='eolica_programada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_verificada_eolica',
+            suffix='eolica_verificada')
+        data_fields += tnames
     data_fields = list(set(data_fields))
     data_fields.sort()
     dtimes = list(data)

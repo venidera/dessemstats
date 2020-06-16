@@ -25,12 +25,20 @@ class TestCompare(unittest.TestCase):
                   'end_date': datetime(2020, 1, 31),
                   'compare_plants': ['P. PECEM I'],
                   'deck_provider': 'ons',
+                  'network': 'com_rede',
                   'server': 'miran-barrel.venidera.net',
                   'port': 9090,
                   'username': username,
                   'password': password,
+                  'query_cmo': True,
+                  'query_gen': True,
+                  'query_pld': True,
+                  'query_load': True,
+                  'query_wind': True,
                   'force_process': True,
                   'normalize': True,
+                  'output_xls': True,
+                  'output_csv': True,
                   'storage_folder': STORAGE_FOLDER}
         compare.wrapup_compare(params=params)
         dados_compare = compare.DADOS_COMPARE

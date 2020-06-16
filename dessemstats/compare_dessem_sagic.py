@@ -21,7 +21,7 @@ from dateutil.relativedelta import relativedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY
 import xlsxwriter
 from deckparser.dessem2dicts import load_dessem
-from dessemstats.interface import load_files, connect_miran
+from dessemstats.interface import load_files, connect_miran, dump_to_csv
 from dessemstats.interface import write_pld_csv, write_load_wind_csv
 
 locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
@@ -196,6 +196,7 @@ def query_compare_data(pparams):
     if sagic_name == 'cmo':
         query = params['query_cmo_template_str'].substitute(
             deck_provider=params['deck_provider'],
+            network=params['network'],
             subsis=dessem_name,
             yyyy_mm=cur_date.strftime('%Y_%m'))
     else:
@@ -219,6 +220,7 @@ def query_compare_data(pparams):
             new_sagic_name = sagic_name
         query = params['query_template_str'].substitute(
             deck_provider=params['deck_provider'],
+            network=params['network'],
             sagic_name=new_sagic_name,
             dessem_name=dessem_name,
             gen_type=gen_type,
@@ -300,26 +302,28 @@ def process_compare_data(params):
         logging.info('Querying: cur_date: %s; next_date: %s',
                      cur_date.date().isoformat(),
                      next_date.date().isoformat())
-        for gen_type in params['dessem_sagic_name']:
-            dessem_names = params['dessem_sagic_name'][gen_type]['dessem']
-            sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
+        if params['query_gen']:
+            for gen_type in params['dessem_sagic_name']:
+                dessem_names = params['dessem_sagic_name'][gen_type]['dessem']
+                sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
+                pparams = list()
+                for d_name, s_name in zip(dessem_names, sagic_names):
+                    if (params['compare_plants'] and
+                            d_name not in params['compare_plants']):
+                        continue
+                    pparams.append((params, cur_date, next_date, gen_type,
+                                    d_name, s_name))
+                results = Parallel(n_jobs=10, verbose=10, backend="threading")(
+                    map(delayed(query_compare_data), pparams))
+                if not all(results):
+                    logging.warning('Not all parallel jobs were successful!')
+        if params['query_cmo']:
             pparams = list()
-            for d_name, s_name in zip(dessem_names, sagic_names):
-                if (params['compare_plants'] and
-                        d_name not in params['compare_plants']):
-                    continue
-                pparams.append((params, cur_date, next_date, gen_type,
-                                d_name, s_name))
+            for subsis in ['se', 'ne', 'n', 's']:
+                pparams.append((params, cur_date, next_date, 'cmo',
+                                subsis, 'cmo'))
             results = Parallel(n_jobs=10, verbose=10, backend="threading")(
                 map(delayed(query_compare_data), pparams))
-            if not all(results):
-                logging.warning('Not all parallel jobs were successful!')
-        pparams = list()
-        for subsis in ['se', 'ne', 'n', 's']:
-            pparams.append((params, cur_date, next_date, 'cmo',
-                            subsis, 'cmo'))
-        results = Parallel(n_jobs=10, verbose=10, backend="threading")(
-            map(delayed(query_compare_data), pparams))
 
 
 def process_ts_data(params):
@@ -631,7 +635,7 @@ def write_xlsx(data, filename='output.xlsx'):
     workbook.close()
     logging.info('Finished outputting data into workbook: %s', filename)
 
-def __write_cmo_csv(dest_path):
+def __write_cmo_csv(params):
     """ writes cmo to csv """
     tstamp_dict = dict()
     for dtime in DADOS_COMPARE['cmo']:
@@ -656,7 +660,9 @@ def __write_cmo_csv(dest_path):
                 else:
                     tstamp_dict[tstamp][
                         data_type] = 0
-    dest_file = dest_path + '/' + 'cmo.csv'
+    dest_file = '%s/cmo_%s_%s.csv' % (params['storage_folder'],
+                                      params['deck_provider'],
+                                      params['network'])
     with open(dest_file, 'w') as cur_file:
         cur_file.write('%s,%s,%s,%s,%s\n' %
                        ('datetime',
@@ -717,13 +723,39 @@ def __write_gen_csv(plant, dest_path):
                             tstamp_dict[tstamp]['programada']))
     logging.info('Finished outputting data into csv file: %s', dest_file)
 
-def write_csv(dest_path='/tmp/'):
+def __write_compare_csv(plant, dest_path):
+    """ writes generation to csv """
+    dtimes_dict = dict()
+    data_types = list()
+    for dtime in DADOS_COMPARE[plant]:
+        for data_type in DADOS_COMPARE[plant][dtime]:
+            if data_type in ['verificada', 'programada', 'dessem']:
+                continue
+            data_types.append(data_type)
+            if dtime not in dtimes_dict:
+                dtimes_dict[dtime] = dict()
+            dtimes_dict[dtime][data_type] = DADOS_COMPARE[
+                plant][dtime][data_type]
+    dtimes = list(dtimes_dict)
+    dtimes.sort()
+    data_types = list(set(data_types))
+    data_types.sort()
+    for dtime in dtimes:
+        for data_type in data_types:
+            if data_type not in dtimes_dict[dtime]:
+                dtimes_dict[dtime][
+                    data_type] = 0
+    dest_file = dest_path + '/' + plant + '_indicadores.csv'
+    dump_to_csv(dest_file, dtimes_dict, data_types, dtimes)
+
+def write_csv(params):
     """ outputs data to individual files as specified by EDP """
     for plant in DADOS_COMPARE:
         if plant == 'cmo':
-            __write_cmo_csv(dest_path)
+            __write_cmo_csv(params)
         else:
-            __write_gen_csv(plant, dest_path)
+            __write_gen_csv(plant, params['storage_folder'])
+            __write_compare_csv(plant, params['storage_folder'])
 
 def wrapup_compare(params):
     """ Empacota os resultados de comparacao entre SAGIC e DESSEM """
@@ -768,13 +800,17 @@ def wrapup_compare(params):
     # sagic_gen_type = build_gen_dict(params)
     existing_dates = list(dates)
     existing_dates.sort()
-    del metrics['dessem']
-    del metrics['verificada']
-    del metrics['programada']
-    del metrics['se']
-    del metrics['s']
-    del metrics['ne']
-    del metrics['n']
+    if 'dessem' in metrics:
+        del metrics['dessem']
+    if 'verificada' in metrics:
+        del metrics['verificada']
+    if 'programada' in metrics:
+        del metrics['programada']
+    if 'se' in metrics:
+        del metrics['se']
+        del metrics['s']
+        del metrics['ne']
+        del metrics['n']
     existing_metrics = list(metrics)
     existing_metrics.sort()
     logging.info('Wrapping up...')
@@ -806,17 +842,24 @@ def wrapup_compare(params):
                         cur_date_data[metric] = DADOS_COMPARE[
                             sagic_name][cur_date][metric]
             time_series[sagic_name].append(cur_date_data)
-    logging.info('Outputting to excel: sagic_statistics.xlsx')
-    write_xlsx(data=time_series, filename='sagic_statistics.xlsx')
-    write_csv(dest_path=params['storage_folder'])
-    write_pld_csv(params['con'],
-                  params['ini_date'],
-                  params['end_date'],
-                  params['storage_folder'])
-    write_load_wind_csv(params['con'],
-                        params['ini_date'],
-                        params['end_date'],
-                        params['storage_folder'])
+    if params['output_xls']:
+        logging.info('Outputting to excel: sagic_statistics.xlsx')
+        write_xlsx(data=time_series,
+                   filename=params['storage_folder']+'/sagic_statistics.xlsx')
+    if params['output_csv']:
+        write_csv(params)
+        if params['query_pld']:
+            write_pld_csv(params['con'],
+                          params['ini_date'],
+                          params['end_date'],
+                          params['storage_folder'])
+        if params['query_load'] or params['query_wind']:
+            write_load_wind_csv(params['con'],
+                                params['ini_date'],
+                                params['end_date'],
+                                params['storage_folder'],
+                                params['query_load'],
+                                params['query_wind'])
     logging.info('Finished!')
 
 
@@ -857,5 +900,7 @@ def wrapup_ts_dessem(params):
                         sagic_name][cur_date][metric]
             time_series[sagic_name].append(cur_date_data)
     logging.info('Outputting to excel: dessem_statistics.xlsx')
-    write_xlsx(data=time_series, filename='dessem_statistics.xlsx')
+    if params['output_xls']:
+        write_xlsx(data=time_series,
+                   filename=params['storage_folder']+'/dessem_statistics.xlsx')
     logging.info('Finished!')

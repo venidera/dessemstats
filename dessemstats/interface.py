@@ -62,7 +62,7 @@ def dump_to_csv(dest_file, data, ts_names, dtimes):
         for dtime in dtimes:
             cur_line = dtime.isoformat()
             for ts_name in ts_names:
-                cur_line += ',%f' % data[dtime][ts_name]
+                cur_line += ',%s' % data[dtime][ts_name]
             cur_line += '\n'
             cur_file.write(cur_line)
     logging.info('Finished outputting data into csv file: %s', dest_file)
@@ -90,17 +90,11 @@ def write_pld_csv(con, ini_datetime, end_datetime, dest_path):
     ts_names.sort()
     dtimes = list(pld_data)
     dtimes.sort()
-    for i, dtime in enumerate(dtimes):
+    for dtime in dtimes:
         for ts_name in ts_names:
             if ts_name not in pld_data[dtime]:
-                if i - 1 >= 0 and ts_name in pld_data[
-                        dtimes[i - 1]]:
-                    pld_data[dtime][
-                        ts_name] = pld_data[
-                            dtimes[i - 1]][ts_name]
-                else:
-                    pld_data[dtime][
-                        ts_name] = 0
+                pld_data[dtime][
+                    ts_name] = ''
     dest_file = dest_path + '/pld.csv'
     dump_to_csv(dest_file, pld_data, ts_names, dtimes)
 
@@ -193,16 +187,10 @@ def write_load_wind_csv(con, ini_datetime, end_datetime, dest_path,
     data_fields.sort()
     dtimes = list(data)
     dtimes.sort()
-    for i, dtime in enumerate(dtimes):
+    for dtime in dtimes:
         for ts_name in data_fields:
             if ts_name not in data[dtime]:
-                if i - 1 >= 0 and ts_name in data[
-                        dtimes[i - 1]]:
-                    data[dtime][
-                        ts_name] = data[
-                            dtimes[i - 1]][ts_name]
-                else:
-                    data[dtime][
-                        ts_name] = 0
+                data[dtime][
+                    ts_name] = ''
     dest_file = dest_path + '/carga_eolica.csv'
     dump_to_csv(dest_file, data, data_fields, dtimes)

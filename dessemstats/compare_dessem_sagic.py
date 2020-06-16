@@ -649,17 +649,11 @@ def __write_cmo_csv(params):
                     'cmo'][dtime][data_type][tstamp]
     tstamp_index = list(tstamp_dict)
     tstamp_index.sort()
-    for i, tstamp in enumerate(tstamp_index):
+    for tstamp in tstamp_index:
         for data_type in ['s', 'se', 'ne', 'n']:
             if data_type not in tstamp_dict[tstamp]:
-                if i - 1 >= 0 and data_type in tstamp_dict[
-                        tstamp_index[i - 1]]:
-                    tstamp_dict[tstamp][
-                        data_type] = tstamp_dict[
-                            tstamp_index[i - 1]][data_type]
-                else:
-                    tstamp_dict[tstamp][
-                        data_type] = 0
+                tstamp_dict[tstamp][
+                    data_type] = ''
     dest_file = '%s/cmo_%s_%s.csv' % (params['storage_folder'],
                                       params['deck_provider'],
                                       params['network'])
@@ -673,7 +667,7 @@ def __write_cmo_csv(params):
         for tstamp in tstamp_index:
             dtime = datetime.fromtimestamp(int(tstamp/1000),
                                            tz=LOCAL_TIMEZONE)
-            cur_file.write('%s,%f,%f,%f,%f\n' %
+            cur_file.write('%s,%s,%s,%s,%s\n' %
                            (dtime.isoformat(),
                             tstamp_dict[tstamp]['s'],
                             tstamp_dict[tstamp]['se'],
@@ -695,17 +689,11 @@ def __write_gen_csv(plant, dest_path):
                     plant][dtime][data_type][tstamp]
     tstamp_index = list(tstamp_dict)
     tstamp_index.sort()
-    for i, tstamp in enumerate(tstamp_index):
+    for tstamp in tstamp_index:
         for data_type in ['verificada', 'programada', 'dessem']:
             if data_type not in tstamp_dict[tstamp]:
-                if i - 1 >= 0 and data_type in tstamp_dict[
-                        tstamp_index[i - 1]]:
-                    tstamp_dict[tstamp][
-                        data_type] = tstamp_dict[
-                            tstamp_index[i - 1]][data_type]
-                else:
-                    tstamp_dict[tstamp][
-                        data_type] = 0
+                tstamp_dict[tstamp][
+                    data_type] = ''
     dest_file = dest_path + '/' + plant + '.csv'
     with open(dest_file, 'w') as cur_file:
         cur_file.write('%s,%s,%s,%s\n' %
@@ -716,7 +704,7 @@ def __write_gen_csv(plant, dest_path):
         for tstamp in tstamp_index:
             dtime = datetime.fromtimestamp(int(tstamp/1000),
                                            tz=LOCAL_TIMEZONE)
-            cur_file.write('%s,%f,%f,%f\n' %
+            cur_file.write('%s,%s,%s,%s\n' %
                            (dtime.isoformat(),
                             tstamp_dict[tstamp]['dessem'],
                             tstamp_dict[tstamp]['verificada'],
@@ -744,7 +732,7 @@ def __write_compare_csv(plant, dest_path):
         for data_type in data_types:
             if data_type not in dtimes_dict[dtime]:
                 dtimes_dict[dtime][
-                    data_type] = 0
+                    data_type] = ''
     dest_file = dest_path + '/' + plant + '_indicadores.csv'
     dump_to_csv(dest_file, dtimes_dict, data_types, dtimes)
 

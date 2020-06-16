@@ -19,10 +19,11 @@ from joblib import Parallel, delayed
 import pytz
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY
-import xlsxwriter
 from deckparser.dessem2dicts import load_dessem
 from dessemstats.interface import load_files, connect_miran, dump_to_csv
 from dessemstats.interface import write_pld_csv, write_load_wind_csv
+from dessemstats.interface import write_pld_xlsx, write_load_wind_xlsx
+from dessemstats.interface import write_xlsx
 
 locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
 LOCAL_TIMEZONE = pytz.timezone('America/Sao_Paulo')
@@ -580,61 +581,6 @@ def do_ts_dessem(params):
         with open('compare_sagic_ts_dessem.pickle', 'wb') as handle:
             pickle.dump(DADOS_DESSEM, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-
-def write_xlsx(data, filename='output.xlsx'):
-    """ Output a dictionary to an Excel file.
-        The first level of the dictionary should contain keys that represent
-        each spreadsheet of the workbook. Each key must contain a list of
-        dictionaries. Each item of this list represents a line in the
-        spreadsheet. """
-    logging.info('Outputting data into workbook: %s', filename)
-    workbook = xlsxwriter.Workbook(filename)
-    bold = workbook.add_format({'bold': True})
-    bold.set_text_wrap()
-    fmt = dict()
-    fmt['br_date'] = workbook.add_format({'num_format': 'dd/mm/yy',
-                                          'bold': False})
-    fmt['br_datetime'] = workbook.add_format({'num_format': 'dd/mm/yy hh:mm',
-                                              'bold': False})
-    fmt['br_month'] = workbook.add_format({'num_format': 'mm/yy',
-                                           'bold': False})
-    fmt['string'] = workbook.add_format({'bold': False})
-    fmt['float'] = workbook.add_format({'bold': False})
-    fmt['reais'] = workbook.add_format({'num_format': 'R$ #,##0.00',
-                                        'bold': False})
-    fmt['percent'] = workbook.add_format({'num_format': '0.00%',
-                                          'bold': False})
-    for sheet in data:
-        logging.info('Writing spreadsheet: %s', sheet)
-        columns = list()
-        for datai in data[sheet]:
-            for key in datai:
-                if key not in columns:
-                    columns.append(key)
-        worksheet = workbook.add_worksheet(sheet)
-        worksheet.freeze_panes(1, 0)
-        row = -1
-        for datai in data[sheet]:
-            row += 1
-            col = -1
-            for key in columns:
-                col += 1
-                if row == 0:
-                    worksheet.write(row, col, key, bold)
-                if key in datai:
-                    if isinstance(datai[key], (dict, list)):
-                        worksheet.write(row+1, col, dumps(datai[key]))
-                    elif isinstance(datai[key], date):
-                        worksheet.write(row+1, col, datai[key],
-                                        fmt['br_datetime'])
-                    elif isinstance(datai[key], datetime):
-                        worksheet.write(row+1, col, datai[key],
-                                        fmt['br_datetime'])
-                    else:
-                        worksheet.write(row+1, col, datai[key])
-    workbook.close()
-    logging.info('Finished outputting data into workbook: %s', filename)
-
 def __write_cmo_csv(params):
     """ writes cmo to csv """
     tstamp_dict = dict()
@@ -747,13 +693,14 @@ def write_csv(params):
 
 def wrapup_compare(params):
     """ Empacota os resultados de comparacao entre SAGIC e DESSEM """
+    logging.info('Wrapping up...')
     connect_miran(params)
     load_files(params)
     do_compare(params=params)
     metrics = dict()
     dates = dict()
-    time_series = dict()
     for sagic_name in DADOS_COMPARE:
+        time_series = dict()
         for cur_date in DADOS_COMPARE[sagic_name]:
             dates[cur_date] = cur_date
             for metric in DADOS_COMPARE[sagic_name][cur_date]:
@@ -770,6 +717,12 @@ def wrapup_compare(params):
                             cur_date][metric][tstamp]
                         time_series['%s_%s' %
                                     (sagic_name, metric)].append(cur_date_data)
+        if params['output_xls']:
+            logging.info('Outputting to excel: %s.xlsx', sagic_name)
+            write_xlsx(
+                data=time_series,
+                filename='%s/%s.xlsx' % (params['storage_folder'], sagic_name))
+    time_series = dict()
     for subsis in ['se', 'ne', 'n', 's']:
         if '%s_%s' % ('cmo', subsis) not in time_series:
             time_series['%s_%s' %
@@ -785,6 +738,14 @@ def wrapup_compare(params):
                     cur_date][subsis][tstamp]
                 time_series['%s_%s' %
                             ('cmo', subsis)].append(cur_date_data)
+    if params['output_xls']:
+        logging.info('Outputting to excel: cmo_%s_%s.xlsx',
+                     params['deck_provider'], params['network'])
+        write_xlsx(
+            data=time_series,
+            filename='%s/cmo_%s_%s.xlsx' % (params['storage_folder'],
+                                            params['deck_provider'],
+                                            params['network']))
     # sagic_gen_type = build_gen_dict(params)
     existing_dates = list(dates)
     existing_dates.sort()
@@ -801,7 +762,7 @@ def wrapup_compare(params):
         del metrics['n']
     existing_metrics = list(metrics)
     existing_metrics.sort()
-    logging.info('Wrapping up...')
+    time_series = dict()
     for sagic_name in DADOS_COMPARE:
         # gen_type = sagic_gen_type[sagic_name]
         time_series[sagic_name] = list()
@@ -830,10 +791,25 @@ def wrapup_compare(params):
                         cur_date_data[metric] = DADOS_COMPARE[
                             sagic_name][cur_date][metric]
             time_series[sagic_name].append(cur_date_data)
+        if params['output_xls']:
+            logging.info('Outputting to excel: %s_indicadores.xlsx', sagic_name)
+            write_xlsx(
+                data=time_series,
+                filename='%s/%s_indicadores.xlsx' % (params['storage_folder'],
+                                                     sagic_name))
     if params['output_xls']:
-        logging.info('Outputting to excel: sagic_statistics.xlsx')
-        write_xlsx(data=time_series,
-                   filename=params['storage_folder']+'/sagic_statistics.xlsx')
+        if params['query_pld']:
+            write_pld_xlsx(params['con'],
+                           params['ini_date'],
+                           params['end_date'],
+                           params['storage_folder'])
+        if params['query_load'] or params['query_wind']:
+            write_load_wind_xlsx(params['con'],
+                                 params['ini_date'],
+                                 params['end_date'],
+                                 params['storage_folder'],
+                                 params['query_load'],
+                                 params['query_wind'])
     if params['output_csv']:
         write_csv(params)
         if params['query_pld']:

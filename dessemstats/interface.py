@@ -159,7 +159,7 @@ def write_pld_csv(con, ini_datetime, end_datetime, dest_path):
     dump_to_csv(dest_file, pld_data, ts_names, dtimes)
 
 def write_pld_xlsx(con, ini_datetime, end_datetime, dest_path):
-    """ outputs pld data do csv file """
+    """ outputs pld data do xlsx file """
     logging.debug('Generating PLD XLSX file...')
     pld_data, dtimes, ts_names = query_pld(con, ini_datetime, end_datetime)
     timeseries = {'pld': list()}
@@ -173,6 +173,24 @@ def write_pld_xlsx(con, ini_datetime, end_datetime, dest_path):
             cur_date_data[ts_name] = pld_data[dtime][ts_name]
         timeseries['pld'].append(cur_date_data)
     dest_file = dest_path + '/pld.xlsx'
+    write_xlsx(timeseries, dest_file)
+
+def write_cmo_xlsx(data, tstamps, ts_names, params):
+    """ outputs cmo data do xlsx file """
+    logging.debug('Generating CMO XLSX file...')
+    timeseries = {'cmo': list()}
+    for tstamp in tstamps:
+        cur_date_data = dict()
+        cur_date_data['Data'] = datetime.fromtimestamp(int(tstamp/1000))
+        for ts_name in ts_names:
+            if ts_name not in data[tstamp]:
+                data[tstamp][
+                    ts_name] = ''
+            cur_date_data[ts_name] = data[tstamp][ts_name]
+        timeseries['cmo'].append(cur_date_data)
+    dest_file = '%s/cmo_%s_%s.xlsx' % (params['storage_folder'],
+                                       params['deck_provider'],
+                                       params['network'])
     write_xlsx(timeseries, dest_file)
 
 def query_hourly_subsis_sagic(

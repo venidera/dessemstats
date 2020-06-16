@@ -23,7 +23,7 @@ from deckparser.dessem2dicts import load_dessem
 from dessemstats.interface import load_files, connect_miran, dump_to_csv
 from dessemstats.interface import write_pld_csv, write_load_wind_csv
 from dessemstats.interface import write_pld_xlsx, write_load_wind_xlsx
-from dessemstats.interface import write_xlsx
+from dessemstats.interface import write_xlsx, write_cmo_xlsx
 
 locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
 LOCAL_TIMEZONE = pytz.timezone('America/Sao_Paulo')
@@ -581,11 +581,12 @@ def do_ts_dessem(params):
         with open('compare_sagic_ts_dessem.pickle', 'wb') as handle:
             pickle.dump(DADOS_DESSEM, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-def __write_cmo_csv(params):
+def __compute_cmo_data():
     """ writes cmo to csv """
     tstamp_dict = dict()
+    data_types = ['s', 'se', 'ne', 'n']
     for dtime in DADOS_COMPARE['cmo']:
-        for data_type in ['s', 'se', 'ne', 'n']:
+        for data_type in data_types:
             if data_type not in DADOS_COMPARE['cmo'][dtime]:
                 continue
             for tstamp in DADOS_COMPARE['cmo'][dtime][data_type]:
@@ -596,10 +597,15 @@ def __write_cmo_csv(params):
     tstamp_index = list(tstamp_dict)
     tstamp_index.sort()
     for tstamp in tstamp_index:
-        for data_type in ['s', 'se', 'ne', 'n']:
+        for data_type in data_types:
             if data_type not in tstamp_dict[tstamp]:
                 tstamp_dict[tstamp][
                     data_type] = ''
+    return tstamp_dict, tstamp_index, data_types
+
+def __write_cmo_csv(params):
+    """ writes cmo to csv"""
+    tstamp_dict, tstamp_index, _ = __compute_cmo_data()
     dest_file = '%s/cmo_%s_%s.csv' % (params['storage_folder'],
                                       params['deck_provider'],
                                       params['network'])
@@ -717,35 +723,13 @@ def wrapup_compare(params):
                             cur_date][metric][tstamp]
                         time_series['%s_%s' %
                                     (sagic_name, metric)].append(cur_date_data)
-        if params['output_xls']:
+        if params['output_xls'] and sagic_name != 'cmo':
             logging.info('Outputting to excel: %s.xlsx', sagic_name)
             write_xlsx(
                 data=time_series,
                 filename='%s/%s.xlsx' % (params['storage_folder'], sagic_name))
-    time_series = dict()
-    for subsis in ['se', 'ne', 'n', 's']:
-        if '%s_%s' % ('cmo', subsis) not in time_series:
-            time_series['%s_%s' %
-                        ('cmo', subsis)] = list()
-        for cur_date in DADOS_COMPARE['cmo']:
-            if subsis not in DADOS_COMPARE['cmo'][cur_date]:
-                continue
-            for tstamp in DADOS_COMPARE['cmo'][cur_date][subsis]:
-                cur_date_data = dict()
-                cur_date_data['Data'] = datetime.fromtimestamp(
-                    int(tstamp/1000))
-                cur_date_data['cmo'] = DADOS_COMPARE['cmo'][
-                    cur_date][subsis][tstamp]
-                time_series['%s_%s' %
-                            ('cmo', subsis)].append(cur_date_data)
-    if params['output_xls']:
-        logging.info('Outputting to excel: cmo_%s_%s.xlsx',
-                     params['deck_provider'], params['network'])
-        write_xlsx(
-            data=time_series,
-            filename='%s/cmo_%s_%s.xlsx' % (params['storage_folder'],
-                                            params['deck_provider'],
-                                            params['network']))
+    data, tstamps, data_types = __compute_cmo_data()
+    write_cmo_xlsx(data, tstamps, data_types, params)
     # sagic_gen_type = build_gen_dict(params)
     existing_dates = list(dates)
     existing_dates.sort()
@@ -762,9 +746,9 @@ def wrapup_compare(params):
         del metrics['n']
     existing_metrics = list(metrics)
     existing_metrics.sort()
-    time_series = dict()
     for sagic_name in DADOS_COMPARE:
         # gen_type = sagic_gen_type[sagic_name]
+        time_series = dict()
         time_series[sagic_name] = list()
         for cur_date in existing_dates:
             if cur_date not in DADOS_COMPARE[sagic_name]:

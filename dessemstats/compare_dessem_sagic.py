@@ -374,9 +374,9 @@ def calculate_statistics(comp_series, sagic_name,
         i_list.append(i)
         j = DADOS_COMPARE[sagic_name][cur_date][comp_series[1]][tstamp]
         j_list.append(j)
-        diffs.append(j - i)
-        diffs_abs.append(abs(j - i))
-        diffs_sqrt.append(sqrt((j - i) * (j - i)))
+        diffs.append(i - j)
+        diffs_abs.append(abs(i - j))
+        diffs_sqrt.append(sqrt((i - j) * (i - j)))
         if prev_tstamp:
             i_prev = DADOS_COMPARE[sagic_name][cur_date][
                 comp_series[0]][prev_tstamp]
@@ -505,7 +505,7 @@ def do_compare(params):
             pickle.dump(DADOS_COMPARE, handle, protocol=pickle.HIGHEST_PROTOCOL)
     compare = [('programada', 'verificada'),
                ('programada', 'dessem'),
-               ('dessem', 'verificada')]
+               ('verificada', 'dessem')]
     installed_capicity, _ = query_installed_capacity(params)
     logging.info('Calculating Statistics...')
     for sagic_name in DADOS_COMPARE:

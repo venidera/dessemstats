@@ -489,25 +489,11 @@ def build_gen_dict(params):
             sagic_gen_type[sagic_name] = gen_type
     return sagic_gen_type
 
-
-def do_compare(params):
-    """ Calcula indicadores de comparacao entre SAGIC e DESSEM """
-    if path.exists('compare_sagic.pickle') and not params['force_process']:
-        with open('compare_sagic.pickle', 'rb') as handle:
-            dados_file = pickle.load(handle)
-        for key in dados_file:
-            DADOS_COMPARE[key] = dados_file[key]
-        data_loaded = True
-    else:
-        data_loaded = False
-        process_compare_data(params)
-    if not data_loaded:
-        with open('compare_sagic.pickle', 'wb') as handle:
-            pickle.dump(DADOS_COMPARE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+def __compare_operation(params, installed_capacity):
+    """ compares operation using various metrics """
     compare = [('programada', 'verificada'),
                ('programada', 'dessem'),
                ('verificada', 'dessem')]
-    installed_capicity, _ = query_installed_capacity(params)
     logging.info('Calculating Statistics...')
     for sagic_name in DADOS_COMPARE:
         if sagic_name == 'cmo':
@@ -519,8 +505,11 @@ def do_compare(params):
                         len(DADOS_COMPARE[sagic_name][cur_date][
                             comp_series[1]]) >= 24):
                     calculate_statistics(comp_series, sagic_name,
-                                         cur_date, installed_capicity,
+                                         cur_date, installed_capacity,
                                          params['normalize'])
+
+def __compare_cmo(installed_capacity):
+    """ compares cmo using various metrics """
     compare = [('ne', 'se'),
                ('ne', 's'),
                ('ne', 'n'),
@@ -539,8 +528,26 @@ def do_compare(params):
                     len(DADOS_COMPARE['cmo'][cur_date][
                         comp_series[1]]) >= 24):
                 calculate_statistics(comp_series, 'cmo',
-                                     cur_date, installed_capicity,
+                                     cur_date, installed_capacity,
                                      False)
+
+def do_compare(params):
+    """ Calcula indicadores de comparacao entre SAGIC e DESSEM """
+    if path.exists('compare_sagic.pickle') and not params['force_process']:
+        with open('compare_sagic.pickle', 'rb') as handle:
+            dados_file = pickle.load(handle)
+        for key in dados_file:
+            DADOS_COMPARE[key] = dados_file[key]
+        data_loaded = True
+    else:
+        data_loaded = False
+        process_compare_data(params)
+    if not data_loaded:
+        with open('compare_sagic.pickle', 'wb') as handle:
+            pickle.dump(DADOS_COMPARE, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    installed_capacity, _ = query_installed_capacity(params)
+    __compare_operation(params, installed_capacity)
+    __compare_cmo(installed_capacity)
     if not data_loaded:
         with open('compare_sagic.pickle', 'wb') as handle:
             pickle.dump(DADOS_COMPARE, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -602,6 +609,67 @@ def __compute_cmo_data():
                 tstamp_dict[tstamp][
                     data_type] = ''
     return tstamp_dict, tstamp_index, data_types
+
+def __write_plant_xlsx(params, sagic_name):
+    """ computes plant time series for xlss """
+    if sagic_name == 'cmo':
+        return
+    time_series = dict()
+    for cur_date in DADOS_COMPARE[sagic_name]:
+        for metric in DADOS_COMPARE[sagic_name][cur_date]:
+            if metric in ['dessem', 'verificada', 'programada']:
+                if '%s_%s' % (sagic_name, metric) not in time_series:
+                    time_series['%s_%s' %
+                                (sagic_name, metric)] = list()
+                for tstamp in DADOS_COMPARE[sagic_name][cur_date][metric]:
+                    cur_date_data = dict()
+                    cur_date_data['Data'] = datetime.fromtimestamp(
+                        int(tstamp/1000))
+                    cur_date_data[metric] = DADOS_COMPARE[sagic_name][
+                        cur_date][metric][tstamp]
+                    time_series['%s_%s' %
+                                (sagic_name, metric)].append(cur_date_data)
+    logging.info('Outputting to excel: %s.xlsx', sagic_name)
+    write_xlsx(
+        data=time_series,
+        filename='%s/%s.xlsx' % (params['storage_folder'], sagic_name))
+
+def __write_metrics_xlsx(params, existing_dates, existing_metrics):
+    """ write metrics (compare data) into xlsx workbook """
+    for sagic_name in DADOS_COMPARE:
+        # gen_type = sagic_gen_type[sagic_name]
+        time_series = dict()
+        time_series[sagic_name] = list()
+        for cur_date in existing_dates:
+            if cur_date not in DADOS_COMPARE[sagic_name]:
+                DADOS_COMPARE[sagic_name][cur_date] = dict()
+            cur_date_data = dict()
+            cur_date_data['Data'] = cur_date
+            for metric in existing_metrics:
+                if any([metric.endswith('_se'),
+                        metric.endswith('_s'),
+                        metric.endswith('_ne'),
+                        metric.endswith('_n')]) and sagic_name == 'cmo':
+                    if metric not in DADOS_COMPARE[sagic_name][cur_date]:
+                        cur_date_data[metric] = ''
+                    else:
+                        cur_date_data[metric] = DADOS_COMPARE[
+                            sagic_name][cur_date][metric]
+                elif not any([metric.endswith('_se'),
+                              metric.endswith('_s'),
+                              metric.endswith('_ne'),
+                              metric.endswith('_n')]) and sagic_name != 'cmo':
+                    if metric not in DADOS_COMPARE[sagic_name][cur_date]:
+                        cur_date_data[metric] = ''
+                    else:
+                        cur_date_data[metric] = DADOS_COMPARE[
+                            sagic_name][cur_date][metric]
+            time_series[sagic_name].append(cur_date_data)
+        logging.info('Outputting to excel: %s_indicadores.xlsx', sagic_name)
+        write_xlsx(
+            data=time_series,
+            filename='%s/%s_indicadores.xlsx' % (params['storage_folder'],
+                                                 sagic_name))
 
 def __write_cmo_csv(params):
     """ writes cmo to csv"""
@@ -697,40 +765,15 @@ def write_csv(params):
             __write_gen_csv(plant, params['storage_folder'])
             __write_compare_csv(plant, params['storage_folder'])
 
-def wrapup_compare(params):
-    """ Empacota os resultados de comparacao entre SAGIC e DESSEM """
-    logging.info('Wrapping up...')
-    connect_miran(params)
-    load_files(params)
-    do_compare(params=params)
+def __prepare_wrapup_metrics():
+    """ prepare metrics to be exported """
     metrics = dict()
     dates = dict()
     for sagic_name in DADOS_COMPARE:
-        time_series = dict()
         for cur_date in DADOS_COMPARE[sagic_name]:
             dates[cur_date] = cur_date
             for metric in DADOS_COMPARE[sagic_name][cur_date]:
                 metrics[metric] = metric
-                if metric in ['dessem', 'verificada', 'programada']:
-                    if '%s_%s' % (sagic_name, metric) not in time_series:
-                        time_series['%s_%s' %
-                                    (sagic_name, metric)] = list()
-                    for tstamp in DADOS_COMPARE[sagic_name][cur_date][metric]:
-                        cur_date_data = dict()
-                        cur_date_data['Data'] = datetime.fromtimestamp(
-                            int(tstamp/1000))
-                        cur_date_data[metric] = DADOS_COMPARE[sagic_name][
-                            cur_date][metric][tstamp]
-                        time_series['%s_%s' %
-                                    (sagic_name, metric)].append(cur_date_data)
-        if params['output_xls'] and sagic_name != 'cmo':
-            logging.info('Outputting to excel: %s.xlsx', sagic_name)
-            write_xlsx(
-                data=time_series,
-                filename='%s/%s.xlsx' % (params['storage_folder'], sagic_name))
-    data, tstamps, data_types = __compute_cmo_data()
-    write_cmo_xlsx(data, tstamps, data_types, params)
-    # sagic_gen_type = build_gen_dict(params)
     existing_dates = list(dates)
     existing_dates.sort()
     if 'dessem' in metrics:
@@ -746,42 +789,21 @@ def wrapup_compare(params):
         del metrics['n']
     existing_metrics = list(metrics)
     existing_metrics.sort()
-    for sagic_name in DADOS_COMPARE:
-        # gen_type = sagic_gen_type[sagic_name]
-        time_series = dict()
-        time_series[sagic_name] = list()
-        for cur_date in existing_dates:
-            if cur_date not in DADOS_COMPARE[sagic_name]:
-                DADOS_COMPARE[sagic_name][cur_date] = dict()
-            cur_date_data = dict()
-            cur_date_data['Data'] = cur_date
-            for metric in existing_metrics:
-                if any([metric.endswith('_se'),
-                        metric.endswith('_s'),
-                        metric.endswith('_ne'),
-                        metric.endswith('_n')]) and sagic_name == 'cmo':
-                    if metric not in DADOS_COMPARE[sagic_name][cur_date]:
-                        cur_date_data[metric] = ''
-                    else:
-                        cur_date_data[metric] = DADOS_COMPARE[
-                            sagic_name][cur_date][metric]
-                elif not any([metric.endswith('_se'),
-                              metric.endswith('_s'),
-                              metric.endswith('_ne'),
-                              metric.endswith('_n')]) and sagic_name != 'cmo':
-                    if metric not in DADOS_COMPARE[sagic_name][cur_date]:
-                        cur_date_data[metric] = ''
-                    else:
-                        cur_date_data[metric] = DADOS_COMPARE[
-                            sagic_name][cur_date][metric]
-            time_series[sagic_name].append(cur_date_data)
-        if params['output_xls']:
-            logging.info('Outputting to excel: %s_indicadores.xlsx', sagic_name)
-            write_xlsx(
-                data=time_series,
-                filename='%s/%s_indicadores.xlsx' % (params['storage_folder'],
-                                                     sagic_name))
+    return existing_dates, existing_metrics
+
+def wrapup_compare(params):
+    """ Empacota os resultados de comparacao entre SAGIC e DESSEM """
+    logging.info('Wrapping up...')
+    connect_miran(params)
+    load_files(params)
+    do_compare(params=params)
     if params['output_xls']:
+        data, tstamps, data_types = __compute_cmo_data()
+        write_cmo_xlsx(data, tstamps, data_types, params)
+        for sagic_name in DADOS_COMPARE:
+            __write_plant_xlsx(params, sagic_name)
+        existing_dates, existing_metrics = __prepare_wrapup_metrics()
+        __write_metrics_xlsx(params, existing_dates, existing_metrics)
         if params['query_pld']:
             write_pld_xlsx(params['con'],
                            params['ini_date'],

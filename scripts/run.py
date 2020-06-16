@@ -34,9 +34,9 @@ INI_DATE = datetime(INI_DATE.year, INI_DATE.month, 1)
 #                   'SAO MANOEL',
 #                   'P. PECEM I',
 #                   'LAJEADO']
-# COMPARE_PLANTS = ['A. VERMELHA']
+COMPARE_PLANTS = ['A. VERMELHA']
 # para comparar todas as plantas:
-COMPARE_PLANTS = []
+# COMPARE_PLANTS = []
 
 # provedor doss decks:
 # DECK_PROVIDER = 'ccee'

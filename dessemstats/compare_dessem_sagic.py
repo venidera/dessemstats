@@ -21,8 +21,8 @@ from dateutil.relativedelta import relativedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY
 from deckparser.dessem2dicts import load_dessem
 from dessemstats.interface import load_files, connect_miran, dump_to_csv
-from dessemstats.interface import write_pld_csv, write_load_wind_csv
-from dessemstats.interface import write_pld_xlsx, write_load_wind_xlsx
+from dessemstats.interface import write_pld_csv, write_load_gen_csv
+from dessemstats.interface import write_pld_xlsx, write_load_gen_xlsx
 from dessemstats.interface import write_xlsx, write_cmo_xlsx
 
 locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
@@ -87,10 +87,10 @@ def query_installed_capacity(params):
         return dict(), dict()
     con = params['con']
     res = con.get_file(oid='file5939_287')
-    filepath = params['storage_folder'] + '/' + res['name']
+    filepath = params['tmp_folder'] + '/' + res['name']
     if not path.exists(filepath):
         filepath = con.download_file(oid='file5939_287',
-                                     pto=params['storage_folder'])
+                                     pto=params['tmp_folder'])
     rootpath = path.dirname(path.realpath(filepath))
     logging.debug('DESSEM deck downloaded: %s', filepath)
     deck = load_dessem(rootpath,
@@ -678,7 +678,7 @@ def __write_cmo_csv(params):
                                       params['deck_provider'],
                                       params['network'])
     with open(dest_file, 'w') as cur_file:
-        cur_file.write('%s,%s,%s,%s,%s\n' %
+        cur_file.write('%s;%s;%s;%s;%s\n' %
                        ('datetime',
                         's',
                         'se',
@@ -687,7 +687,7 @@ def __write_cmo_csv(params):
         for tstamp in tstamp_index:
             dtime = datetime.fromtimestamp(int(tstamp/1000),
                                            tz=LOCAL_TIMEZONE)
-            cur_file.write('%s,%s,%s,%s,%s\n' %
+            cur_file.write('%s;%s;%s;%s;%s\n' %
                            (dtime.isoformat(),
                             tstamp_dict[tstamp]['s'],
                             tstamp_dict[tstamp]['se'],
@@ -716,7 +716,7 @@ def __write_gen_csv(plant, dest_path):
                     data_type] = ''
     dest_file = dest_path + '/' + plant + '.csv'
     with open(dest_file, 'w') as cur_file:
-        cur_file.write('%s,%s,%s,%s\n' %
+        cur_file.write('%s;%s;%s;%s\n' %
                        ('datetime',
                         'dessem',
                         'verificada',
@@ -724,7 +724,7 @@ def __write_gen_csv(plant, dest_path):
         for tstamp in tstamp_index:
             dtime = datetime.fromtimestamp(int(tstamp/1000),
                                            tz=LOCAL_TIMEZONE)
-            cur_file.write('%s,%s,%s,%s\n' %
+            cur_file.write('%s;%s;%s;%s\n' %
                            (dtime.isoformat(),
                             tstamp_dict[tstamp]['dessem'],
                             tstamp_dict[tstamp]['verificada'],
@@ -810,12 +810,13 @@ def wrapup_compare(params):
                            params['end_date'],
                            params['storage_folder'])
         if params['query_load'] or params['query_wind']:
-            write_load_wind_xlsx(params['con'],
-                                 params['ini_date'],
-                                 params['end_date'],
-                                 params['storage_folder'],
-                                 params['query_load'],
-                                 params['query_wind'])
+            write_load_gen_xlsx(params['con'],
+                                params['ini_date'],
+                                params['end_date'],
+                                params['storage_folder'],
+                                params['query_load'],
+                                params['query_wind'],
+                                params['query_gen'])
     if params['output_csv']:
         write_csv(params)
         if params['query_pld']:
@@ -824,12 +825,13 @@ def wrapup_compare(params):
                           params['end_date'],
                           params['storage_folder'])
         if params['query_load'] or params['query_wind']:
-            write_load_wind_csv(params['con'],
-                                params['ini_date'],
-                                params['end_date'],
-                                params['storage_folder'],
-                                params['query_load'],
-                                params['query_wind'])
+            write_load_gen_csv(params['con'],
+                               params['ini_date'],
+                               params['end_date'],
+                               params['storage_folder'],
+                               params['query_load'],
+                               params['query_wind'],
+                               params['query_gen'])
     logging.info('Finished!')
 
 

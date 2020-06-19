@@ -32,6 +32,9 @@ STORAGE_FOLDER = ('/home/marcos/OneDrive/tmp/'
                   'resultados_preco_horario/venidera_miran/')
 if not os.path.exists(STORAGE_FOLDER):
     os.makedirs(STORAGE_FOLDER)
+TMP_FOLDER = '/tmp/edp/'
+if not os.path.exists(TMP_FOLDER):
+    os.makedirs(TMP_FOLDER)
 
 SERVER = 'miran-barrel.venidera.net'
 PORT = 9090
@@ -59,7 +62,8 @@ PARAMS = {'ini_date': INI_DATE,
           'normalize': NORMALIZE,
           'output_xls': OUTPUT_XLS,
           'output_csv': OUTPUT_CSV,
-          'storage_folder': STORAGE_FOLDER}
+          'storage_folder': STORAGE_FOLDER,
+          'tmp_folder': TMP_FOLDER}
 
 compare.wrapup_compare(params=PARAMS)
 

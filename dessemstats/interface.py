@@ -20,26 +20,26 @@ def load_files(params):
     """ Carrega os arquivos necessarios para o processo """
     con = params['con']
     res = con.get_file(oid='file8884_1781')
-    dessem_sagic_file = params['storage_folder'] + '/' + res['name']
+    dessem_sagic_file = params['tmp_folder'] + '/' + res['name']
     if not path.exists(dessem_sagic_file):
         dessem_sagic_file = con.download_file(oid='file8884_1781',
-                                              pto=params['storage_folder'])
+                                              pto=params['tmp_folder'])
     with open(dessem_sagic_file, 'r') as myfile:
         dessem_sagic_name = load(myfile)
     params['dessem_sagic_name'] = dessem_sagic_name
     res = con.get_file(oid='file6093_3674')
-    query_file = params['storage_folder'] + '/' + res['name']
+    query_file = params['tmp_folder'] + '/' + res['name']
     if not path.exists(query_file):
         query_file = con.download_file(oid='file6093_3674',
-                                       pto=params['storage_folder'])
+                                       pto=params['tmp_folder'])
     with open(query_file, 'r') as myfile:
         query_template_str = Template(myfile.read())
     params['query_template_str'] = query_template_str
     res = con.get_file(oid='file2666_8636')
-    query_file = params['storage_folder'] + '/' + res['name']
+    query_file = params['tmp_folder'] + '/' + res['name']
     if not path.exists(query_file):
         query_file = con.download_file(oid='file2666_8636',
-                                       pto=params['storage_folder'])
+                                       pto=params['tmp_folder'])
     with open(query_file, 'r') as myfile:
         query_template_str = Template(myfile.read())
     params['query_cmo_template_str'] = query_template_str
@@ -57,13 +57,13 @@ def dump_to_csv(dest_file, data, ts_names, dtimes):
     with open(dest_file, 'w') as cur_file:
         cur_line = 'datetime'
         for ts_name in ts_names:
-            cur_line += ',' + ts_name
+            cur_line += ';' + ts_name
         cur_line += '\n'
         cur_file.write(cur_line)
         for dtime in dtimes:
             cur_line = dtime.isoformat()
             for ts_name in ts_names:
-                cur_line += ',%s' % data[dtime][ts_name]
+                cur_line += ';%s' % data[dtime][ts_name]
             cur_line += '\n'
             cur_file.write(cur_line)
     logging.info('Finished outputting data into csv file: %s', dest_file)
@@ -239,8 +239,8 @@ def query_hourly_subsis_sagic(
             data[dtime][subsis] = value
     return data, list(tseries)
 
-def __process_load_wind(con, ini_datetime, end_datetime,
-                        query_load, query_wind):
+def __process_load_gen(con, ini_datetime, end_datetime,
+                       query_load, query_wind, query_gen):
     """ pre-process load and wind data """
     data = dict()
     data_fields = list()
@@ -278,36 +278,71 @@ def __process_load_wind(con, ini_datetime, end_datetime,
             ts_prefix='ts_ons_geracao_horaria_verificada_eolica',
             suffix='eolica_verificada')
         data_fields += tnames
+    if query_gen:
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_programada_hidraulica',
+            suffix='hidraulica_programada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_verificada_hidraulica',
+            suffix='hidraulica_verificada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_programada_termica',
+            suffix='termica_programada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_verificada_termica',
+            suffix='termica_verificada')
+        data_fields += tnames
     data_fields = list(set(data_fields))
     data_fields.sort()
     dtimes = list(data)
     dtimes.sort()
     return data, dtimes, data_fields
 
-def write_load_wind_csv(con, ini_datetime, end_datetime, dest_path,
-                        query_load, query_wind):
+def write_load_gen_csv(con, ini_datetime, end_datetime, dest_path,
+                       query_load, query_wind, query_gen):
     """ outputs ons load (verified and predicted) to csv """
-    data, dtimes, data_fields = __process_load_wind(con,
-                                                    ini_datetime,
-                                                    end_datetime,
-                                                    query_load,
-                                                    query_wind)
+    data, dtimes, data_fields = __process_load_gen(con,
+                                                   ini_datetime,
+                                                   end_datetime,
+                                                   query_load,
+                                                   query_wind,
+                                                   query_gen)
     for dtime in dtimes:
         for ts_name in data_fields:
             if ts_name not in data[dtime]:
                 data[dtime][
                     ts_name] = ''
-    dest_file = dest_path + '/carga_eolica.csv'
+    dest_file = dest_path + '/carga_geracao_subsis.csv'
     dump_to_csv(dest_file, data, data_fields, dtimes)
 
-def write_load_wind_xlsx(con, ini_datetime, end_datetime, dest_path,
-                         query_load, query_wind):
+def write_load_gen_xlsx(con, ini_datetime, end_datetime, dest_path,
+                        query_load, query_wind, query_gen):
     """ outputs ons load (verified and predicted) to csv """
-    data, dtimes, data_fields = __process_load_wind(con,
-                                                    ini_datetime,
-                                                    end_datetime,
-                                                    query_load,
-                                                    query_wind)
+    data, dtimes, data_fields = __process_load_gen(con,
+                                                   ini_datetime,
+                                                   end_datetime,
+                                                   query_load,
+                                                   query_wind,
+                                                   query_gen)
     timeseries = {'load_wind': list()}
     for dtime in dtimes:
         cur_date_data = dict()
@@ -318,5 +353,5 @@ def write_load_wind_xlsx(con, ini_datetime, end_datetime, dest_path,
                     ts_name] = ''
             cur_date_data[ts_name] = data[dtime][ts_name]
         timeseries['load_wind'].append(cur_date_data)
-    dest_file = dest_path + '/carga_eolica.xlsx'
+    dest_file = dest_path + '/carga_geracao_subsis.xlsx'
     write_xlsx(timeseries, dest_file)

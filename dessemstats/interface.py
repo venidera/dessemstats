@@ -300,6 +300,22 @@ def __process_load_gen(con, ini_datetime, end_datetime,
             ini_datetime,
             end_datetime,
             data,
+            ts_prefix='ts_ons_geracao_horaria_programada_solar',
+            suffix='solar_programada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_verificada_solar',
+            suffix='solar_verificada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
             ts_prefix='ts_ons_geracao_horaria_programada_termica',
             suffix='termica_programada')
         data_fields += tnames
@@ -310,6 +326,22 @@ def __process_load_gen(con, ini_datetime, end_datetime,
             data,
             ts_prefix='ts_ons_geracao_horaria_verificada_termica',
             suffix='termica_verificada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_programada_total',
+            suffix='total_programada')
+        data_fields += tnames
+        data, tnames = query_hourly_subsis_sagic(
+            con,
+            ini_datetime,
+            end_datetime,
+            data,
+            ts_prefix='ts_ons_geracao_horaria_verificada_total',
+            suffix='total_verificada')
         data_fields += tnames
     data_fields = list(set(data_fields))
     data_fields.sort()
@@ -343,7 +375,7 @@ def write_load_gen_xlsx(con, ini_datetime, end_datetime, dest_path,
                                                    query_load,
                                                    query_wind,
                                                    query_gen)
-    timeseries = {'load_wind': list()}
+    timeseries = {'carga_geracao_subsis': list()}
     for dtime in dtimes:
         cur_date_data = dict()
         cur_date_data['Data'] = dtime.replace(tzinfo=None)
@@ -352,6 +384,6 @@ def write_load_gen_xlsx(con, ini_datetime, end_datetime, dest_path,
                 data[dtime][
                     ts_name] = ''
             cur_date_data[ts_name] = data[dtime][ts_name]
-        timeseries['load_wind'].append(cur_date_data)
+        timeseries['carga_geracao_subsis'].append(cur_date_data)
     dest_file = dest_path + '/carga_geracao_subsis.xlsx'
     write_xlsx(timeseries, dest_file)

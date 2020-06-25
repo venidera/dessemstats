@@ -25,7 +25,6 @@ from dessemstats.interface import write_pld_csv, write_load_gen_csv
 from dessemstats.interface import write_pld_xlsx, write_load_gen_xlsx
 from dessemstats.interface import write_xlsx, write_cmo_xlsx
 
-locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
 LOCAL_TIMEZONE = pytz.timezone('America/Sao_Paulo')
 # utc_timezone = pytz.timezone('UTC')
 CONSOLE = logging.StreamHandler()
@@ -687,12 +686,20 @@ def __write_cmo_csv(params):
         for tstamp in tstamp_index:
             dtime = datetime.fromtimestamp(int(tstamp/1000),
                                            tz=LOCAL_TIMEZONE)
+            sul = locale.str(tstamp_dict[tstamp]['s'])\
+                if tstamp_dict[tstamp]['s'] != '' else ''
+            sudeste = locale.str(tstamp_dict[tstamp]['se'])\
+                if tstamp_dict[tstamp]['se'] != '' else ''
+            nordeste = locale.str(tstamp_dict[tstamp]['ne'])\
+                if tstamp_dict[tstamp]['ne'] != '' else ''
+            norte = locale.str(tstamp_dict[tstamp]['n'])\
+                if tstamp_dict[tstamp]['n'] != '' else ''
             cur_file.write('%s;%s;%s;%s;%s\n' %
                            (dtime.isoformat(),
-                            tstamp_dict[tstamp]['s'],
-                            tstamp_dict[tstamp]['se'],
-                            tstamp_dict[tstamp]['ne'],
-                            tstamp_dict[tstamp]['n']))
+                            sul,
+                            sudeste,
+                            nordeste,
+                            norte))
     logging.info('Finished outputting data into csv file: %s', dest_file)
 
 def __write_gen_csv(plant, dest_path):
@@ -724,11 +731,17 @@ def __write_gen_csv(plant, dest_path):
         for tstamp in tstamp_index:
             dtime = datetime.fromtimestamp(int(tstamp/1000),
                                            tz=LOCAL_TIMEZONE)
+            dessem = locale.str(tstamp_dict[tstamp]['dessem'])\
+                if tstamp_dict[tstamp]['dessem'] != '' else ''
+            verificada = locale.str(tstamp_dict[tstamp]['verificada'])\
+                if tstamp_dict[tstamp]['verificada'] != '' else ''
+            programada = locale.str(tstamp_dict[tstamp]['programada'])\
+                if tstamp_dict[tstamp]['programada'] != '' else ''
             cur_file.write('%s;%s;%s;%s\n' %
                            (dtime.isoformat(),
-                            tstamp_dict[tstamp]['dessem'],
-                            tstamp_dict[tstamp]['verificada'],
-                            tstamp_dict[tstamp]['programada']))
+                            dessem,
+                            verificada,
+                            programada))
     logging.info('Finished outputting data into csv file: %s', dest_file)
 
 def __write_compare_csv(plant, dest_path):

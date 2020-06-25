@@ -5,11 +5,13 @@ Proprietary and confidential
 Written by Marcos Leone Filho <marcos@venidera.com>
 """
 
+import locale
 from datetime import datetime, timedelta
 import getpass
 import os
 import dessemstats.compare_dessem_sagic as compare
 
+locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
 
 # ********************************************
 # Definicao dos parametros basicos de execucao

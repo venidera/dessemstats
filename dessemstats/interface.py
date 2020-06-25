@@ -6,6 +6,7 @@ Written by Marcos Leone Filho <marcos@venidera.com>
 """
 
 import logging
+import locale
 from datetime import datetime, date
 from string import Template
 from json import load, dumps
@@ -63,7 +64,8 @@ def dump_to_csv(dest_file, data, ts_names, dtimes):
         for dtime in dtimes:
             cur_line = dtime.isoformat()
             for ts_name in ts_names:
-                cur_line += ';%s' % data[dtime][ts_name]
+                cur_line += ';%s' % locale.str(data[dtime][ts_name])\
+                    if data[dtime][ts_name] != '' else ''
             cur_line += '\n'
             cur_file.write(cur_line)
     logging.info('Finished outputting data into csv file: %s', dest_file)
@@ -216,14 +218,12 @@ def query_hourly_subsis_sagic(
     assert isinstance(data, dict),\
         'data must be dictionary'
     tseries = dict()
-    tseries['s_' + suffix] = con.get_timeseries(params={
-        'name': ts_prefix + '_subsistema_sul'})
-    tseries['seco_' + suffix] = con.get_timeseries(params={
-        'name': ts_prefix + '_subsistema_sudeste'})
-    tseries['n_' + suffix] = con.get_timeseries(params={
-        'name': ts_prefix + '_subsistema_norte'})
-    tseries['ne_' + suffix] = con.get_timeseries(params={
-        'name': ts_prefix + '_subsistema_nordeste'})
+    for i, j in zip(['s_', 'seco_', 'n_', 'ne_'],
+                    ['sul', 'sudeste', 'norte', 'nordeste']):
+        tseries[i + suffix] = con.get_timeseries(params={
+            'name': ts_prefix + '_subsistema_' + j})
+        if not tseries[i + suffix]:
+            del tseries[i + suffix]
     for subsis in tseries:
         res_points = con.get_points(
             oid=tseries[subsis][0]['tsid'],

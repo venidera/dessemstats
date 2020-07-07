@@ -16,8 +16,9 @@ locale.setlocale(locale.LC_ALL, ('pt_BR.UTF-8'))
 # definindo data de inicio e final da comparacao
 END_DATE = datetime.now()
 END_DATE = datetime(END_DATE.year, END_DATE.month + 1, 1) - timedelta(days=1)
-INI_DATE = END_DATE - timedelta(days=45)
-INI_DATE = datetime(INI_DATE.year, INI_DATE.month, 1)
+#INI_DATE = END_DATE - timedelta(days=45)
+#INI_DATE = datetime(INI_DATE.year, INI_DATE.month, 1)
+INI_DATE = datetime(2020, 1, 1)
 
 COMPARE_PLANTS = []
 DECK_PROVIDER = 'ons'

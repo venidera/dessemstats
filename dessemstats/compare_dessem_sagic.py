@@ -213,6 +213,16 @@ def query_compare_data(pparams):
             return True
     factor = len(s_name)
     for sagic_name in s_name:
+        ts_gen = 'ts_ons_geracao_horaria_verificada_%s' % sagic_name
+        if 'cmo' not in sagic_name:
+            gen_ts = con.get_timeseries(params={'name': ts_gen})
+            if not gen_ts:
+                logging.debug('%s. %s: %s. %s: %s. %s: %s',
+                              'Failed to query data for: ',
+                              'sagic_name', sagic_name,
+                              'dessem_name', d_name,
+                              'current_date', cur_date.strftime('%m/%Y'))
+                continue
         logging.debug('Querying plant: %s', sagic_name)
         con = params['con']
         if sagic_name not in DADOS_COMPARE:

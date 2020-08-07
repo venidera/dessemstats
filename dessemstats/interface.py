@@ -9,11 +9,12 @@ import logging
 import locale
 from datetime import datetime, date
 from string import Template
-from json import load, dumps
+from json import dumps
 from os import path
 import pytz
 import xlsxwriter
 import barrel_client
+from vplantnaming.naming import PlantNaming
 
 LOCAL_TIMEZONE = pytz.timezone('America/Sao_Paulo')
 
@@ -21,13 +22,8 @@ def load_files(params):
     """ Carrega os arquivos necessarios para o processo """
     con = params['con']
     res = con.get_file(oid='file8884_1781')
-    dessem_sagic_file = params['tmp_folder'] + '/' + res['name']
-    if not path.exists(dessem_sagic_file):
-        dessem_sagic_file = con.download_file(oid='file8884_1781',
-                                              pto=params['tmp_folder'])
-    with open(dessem_sagic_file, 'r') as myfile:
-        dessem_sagic_name = load(myfile)
-    params['dessem_sagic_name'] = dessem_sagic_name
+    naming = PlantNaming(con)
+    params['dessem_sagic_name'] = naming.match_dict
     res = con.get_file(oid='file6093_3674')
     query_file = params['tmp_folder'] + '/' + res['name']
     if not path.exists(query_file):

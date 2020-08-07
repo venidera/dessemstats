@@ -20,6 +20,7 @@ import pytz
 from dateutil.relativedelta import relativedelta
 from dateutil.rrule import rrule, DAILY, MONTHLY
 from deckparser.dessem2dicts import load_dessem
+from vplantnaming.naming import name_to_id
 from dessemstats.interface import load_files, connect_miran, dump_to_csv
 from dessemstats.interface import write_pld_csv, write_load_gen_csv
 from dessemstats.interface import write_pld_xlsx, write_load_gen_xlsx
@@ -40,6 +41,8 @@ logging.getLogger().addHandler(CONSOLE)
 # LOCALDATETIME = datetime.today()
 # CURRENT_DATE = LOCALDATETIME.date().isoformat()
 
+GEN_TYPE = {'uhe': 'hidraulica',
+            'ute': 'termica'}
 DADOS_COMPARE = dict()
 DADOS_DESSEM = dict()
 
@@ -102,19 +105,20 @@ def query_installed_capacity(params):
     key_date = list(deck)[0]
     key_rd = list(deck[key_date])[0]
     for uhe in deck[key_date][key_rd]['hidr']['UHE']:
-        if uhe['nome'] not in params['dessem_sagic_name'][
-                'hidraulica']['dessem']:
+        nome_id = name_to_id(uhe['nome'])
+        if nome_id not in params['dessem_sagic_name'][
+                'uhe']['by_cepelname']:
             continue
         total_capacity = 0
         for num_units, capacity in zip(uhe['numUG'], uhe['potencia']):
             total_capacity += num_units * capacity
-        idx = params['dessem_sagic_name'][
-            'hidraulica']['dessem'].index(uhe['nome'])
-        s_name = params['dessem_sagic_name']['hidraulica']['sagic'][idx]
-        sagic_name = re.sub(r'_P$', '', s_name)
-        sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
-        installed_capacity[sagic_name] = total_capacity
-        reservoir_volume[sagic_name] = uhe['volMax'] - uhe['volMin']
+        s_name = params['dessem_sagic_name']['uhe'][
+            'by_cepelname'][nome_id]['ons_sagic']
+        factor = len(s_name)
+        for sagic_name in s_name:
+            installed_capacity[sagic_name] = total_capacity / factor
+            reservoir_volume[sagic_name] = (
+                uhe['volMax'] - uhe['volMin']) / factor
     ute_by_id = dict()
     for i in deck[key_date][key_rd]['termdat']['CADUNIDT']:
         if i['idUsina'] not in ute_by_id:
@@ -124,24 +128,24 @@ def query_installed_capacity(params):
         if ute_desc['idUsina'] not in ute_by_id:
             continue
         ute_unit_data = ute_by_id[ute_desc['idUsina']]
-        if ute_desc['nomeUsina'] not in params[
-                'dessem_sagic_name']['termica']['dessem']:
+        nome_id = name_to_id(ute_desc['nomeUsina'])
+        if nome_id not in params['dessem_sagic_name'][
+                'ute']['by_cepelname']:
             continue
-        idx = params['dessem_sagic_name']['termica']['dessem'].index(
-            ute_desc['nomeUsina'])
-        s_name = params['dessem_sagic_name']['termica']['sagic'][idx]
-        sagic_name = re.sub(r'_P$', '', s_name)
-        sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
+        s_name = params['dessem_sagic_name']['ute'][
+            'by_cepelname'][nome_id]['ons_sagic']
         capacidade = 0
         for unit_data in ute_unit_data:
             capacidade += unit_data['capacidade']
-        installed_capacity[sagic_name] = capacidade
-        logging.debug('Computed installed capacity for UTE "%s": %s',
-                      sagic_name, str(capacidade))
+        factor = len(s_name)
+        for sagic_name in s_name:
+            installed_capacity[sagic_name] = capacidade / factor
+            logging.debug('Computed installed capacity for UTE "%s": %s',
+                          sagic_name, str(capacidade))
     return installed_capacity, reservoir_volume
 
 
-def build_compare_dict(grp, sagic_name, subsis):
+def build_compare_dict(grp, sagic_name, subsis, factor):
     """ Constroi um dicionario organizado para dados de comparacao
         entre SAGIC e DESSEM """
     for metric in ['programada', 'verificada', 'dessem']:
@@ -159,7 +163,7 @@ def build_compare_dict(grp, sagic_name, subsis):
                 if pair[0] not in DADOS_COMPARE[sagic_name][cur_date][
                         metric]:
                     DADOS_COMPARE[sagic_name][cur_date][metric][
-                        pair[0]] = pair[1]
+                        pair[0]] = pair[1] / factor
     if 'cmo' in grp['name']:
         for pair in grp[
                 'results_timeseries'][
@@ -186,81 +190,84 @@ def query_compare_data(pparams):
     start = cur_date.isoformat()
     end = next_date.isoformat()
     cur_date = cur_date.date()
-    dessem_name = re.sub(r'[\W]+', '_', d_name).lower()
-    sagic_name = re.sub(r'_P$', '', s_name)
-    sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
-    logging.debug('Querying plant: %s', sagic_name)
+    ts_gen = '%s_%s_%s_ger%s_%s_%s_%s' % (
+        'ts_' + params['deck_provider'] + '_dessem_completo',
+        cur_date.isoformat().replace('-', '_'),
+        'com_rede_pdo_operacao_interval',
+        gen_type[:4],
+        d_name,
+        'geracao',
+        gen_type)
     con = params['con']
-    if sagic_name not in DADOS_COMPARE:
-        DADOS_COMPARE[sagic_name] = dict()
-    if sagic_name == 'cmo':
-        query = params['query_cmo_template_str'].substitute(
-            deck_provider=params['deck_provider'],
-            network=params['network'],
-            subsis=dessem_name,
-            yyyy_mm=cur_date.strftime('%Y_%m'))
-    else:
-        new_ts_name = 'ts_ons_geracao_horaria_verificada_%s_' % sagic_name
-        res = con.get_tags(params={'q': new_ts_name + '*'})
-        new_sagic_name = ''
-        if res:
-            for cur_tag in res:
-                if new_ts_name in cur_tag['name']:
-                    cur_ts = con.get_timeseries(
-                        params={'name': cur_tag['name']})
-                    if not cur_ts:
-                        continue
-                    cur_pts = con.get_points(oid=cur_ts[0]['tsid'])
-                    if not cur_pts['points_returned']:
-                        continue
-                    new_sagic_name = cur_tag['name'].replace(
-                        'ts_ons_geracao_horaria_verificada_', '')
-                    break
-        if not new_sagic_name:
-            new_sagic_name = sagic_name
-        query = params['query_template_str'].substitute(
-            deck_provider=params['deck_provider'],
-            network=params['network'],
-            sagic_name=new_sagic_name,
-            dessem_name=dessem_name,
-            gen_type=gen_type,
-            yyyy_mm=cur_date.strftime('%Y_%m'))
-    query = loads(query)
-    query['intervals']['date_ini'] = start
-    query['intervals']['date_fin'] = end
-    resp = con.consulta_miran_web(data=query)
-    if resp:
-        for grp in query['consults']:
-            grp['results'] = dict(
-                resp['group'][str(grp['id'])])
-            ltimeseries = list(grp['results']['timeseries'])
-            payload = {'start': start,
-                       'end': end,
-                       'timeseries': ltimeseries}
-            try:
-                respts = con.get_timeseries_sum(data=payload)
-            except AssertionError as ass_err:
-                respts = None
-                logging.error('%s. %s: %s. %s: %s. %s: %s',
-                              str(ass_err),
-                              'sagic_name', sagic_name,
-                              'dessem_name', dessem_name,
-                              'current_date', cur_date.strftime('%m/%Y'))
-            if respts and respts[0]:
-                grp['results_timeseries'] = respts[0]
-                build_compare_dict(grp, sagic_name, dessem_name)
-            else:
-                logging.error('%s. [%s] (%s) %s: %s. %s: %s. %s: %s - dump: %s',
-                              grp['name'],
-                              'Error retrieving timeseries sum',
-                              dumps(payload),
-                              'sagic_name', sagic_name,
-                              'dessem_name', dessem_name,
-                              'current_date', cur_date.strftime('%m/%Y'),
-                              dumps(respts))
-    else:
-        logging.critical('Failed to evaluate query: %s', dumps(query))
-        # raise Exception('Fatal error. Unable to process query. Aborting.')
+    if 'cmo' not in s_name:
+        gen_ts = con.get_timeseries(params={'name': ts_gen})
+        if not gen_ts:
+            # in this case, the current cepel name (d_name) might not be applied
+            # to the dessem names (could be a newave/decomp name), so we move
+            # forward to the next cepel name
+            logging.debug('%s. %s: %s. %s: %s. %s: %s',
+                          'Failed to query data for: ',
+                          'sagic_name', dumps(s_name),
+                          'dessem_name', d_name,
+                          'current_date', cur_date.strftime('%m/%Y'))
+            return True
+    factor = len(s_name)
+    for sagic_name in s_name:
+        logging.debug('Querying plant: %s', sagic_name)
+        con = params['con']
+        if sagic_name not in DADOS_COMPARE:
+            DADOS_COMPARE[sagic_name] = dict()
+        if sagic_name == 'cmo':
+            query = params['query_cmo_template_str'].substitute(
+                deck_provider=params['deck_provider'],
+                network=params['network'],
+                subsis=d_name,
+                yyyy_mm=cur_date.strftime('%Y_%m'))
+        else:
+            query = params['query_template_str'].substitute(
+                deck_provider=params['deck_provider'],
+                network=params['network'],
+                sagic_name=sagic_name,
+                dessem_name=d_name,
+                gen_type=gen_type,
+                yyyy_mm=cur_date.strftime('%Y_%m'))
+        query = loads(query)
+        query['intervals']['date_ini'] = start
+        query['intervals']['date_fin'] = end
+        resp = con.consulta_miran_web(data=query)
+        if resp:
+            for grp in query['consults']:
+                grp['results'] = dict(
+                    resp['group'][str(grp['id'])])
+                ltimeseries = list(grp['results']['timeseries'])
+                payload = {'start': start,
+                           'end': end,
+                           'timeseries': ltimeseries}
+                try:
+                    respts = con.get_timeseries_sum(data=payload)
+                except AssertionError as ass_err:
+                    respts = None
+                    logging.error('%s. %s: %s. %s: %s. %s: %s',
+                                  str(ass_err),
+                                  'sagic_name', sagic_name,
+                                  'dessem_name', d_name,
+                                  'current_date', cur_date.strftime('%m/%Y'))
+                if respts and respts[0]:
+                    grp['results_timeseries'] = respts[0]
+                    build_compare_dict(grp, sagic_name, d_name, factor)
+                else:
+                    logging.error(
+                        '%s. [%s] (%s) %s: %s. %s: %s. %s: %s - dump: %s',
+                        grp['name'],
+                        'Error retrieving timeseries sum',
+                        dumps(payload),
+                        'sagic_name', sagic_name,
+                        'dessem_name', d_name,
+                        'current_date', cur_date.strftime('%m/%Y'),
+                        dumps(respts))
+        else:
+            logging.critical('Failed to evaluate query: %s', dumps(query))
+            # raise Exception('Fatal error. Unable to process query. Aborting.')
     return True
 
 
@@ -268,28 +275,27 @@ def query_complete_data(pparams):
     """ Consulta dados de geracao e volume inicial por dia operativo """
     params, cur_date, gen_type, d_name, s_name = pparams
     cur_date_str = cur_date.isoformat()
-    dessem_name = re.sub(r'[\W]+', '_', d_name).lower()
-    sagic_name = re.sub(r'_P$', '', s_name)
-    sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
-    logging.debug('Querying plant: %s', sagic_name)
-    if sagic_name not in DADOS_DESSEM:
-        DADOS_DESSEM[sagic_name] = dict()
-    gen_points, vol_points = __return_ts_points(cur_date_str,
-                                                gen_type,
-                                                dessem_name,
-                                                params)
-    if cur_date not in DADOS_DESSEM[sagic_name]:
-        DADOS_DESSEM[sagic_name][cur_date] = dict()
-        DADOS_DESSEM[sagic_name][cur_date]['dessem_gen'] = dict()
-        DADOS_DESSEM[sagic_name][cur_date]['dessem_vol'] = dict()
-    if gen_points:
-        for itstamp, tstamp in enumerate(gen_points['timestamps']):
-            DADOS_DESSEM[sagic_name][cur_date]['dessem_gen'][
-                tstamp] = gen_points['values'][itstamp]
-    if vol_points:
-        for itstamp, tstamp in enumerate(vol_points['timestamps']):
-            DADOS_DESSEM[sagic_name][cur_date]['dessem_vol'][
-                tstamp] = vol_points['values'][itstamp]
+    factor = len(s_name)
+    for sagic_name in s_name:
+        logging.debug('Querying plant: %s', sagic_name)
+        if sagic_name not in DADOS_DESSEM:
+            DADOS_DESSEM[sagic_name] = dict()
+        gen_points, vol_points = __return_ts_points(cur_date_str,
+                                                    gen_type,
+                                                    d_name,
+                                                    params)
+        if cur_date not in DADOS_DESSEM[sagic_name]:
+            DADOS_DESSEM[sagic_name][cur_date] = dict()
+            DADOS_DESSEM[sagic_name][cur_date]['dessem_gen'] = dict()
+            DADOS_DESSEM[sagic_name][cur_date]['dessem_vol'] = dict()
+        if gen_points:
+            for itstamp, tstamp in enumerate(gen_points['timestamps']):
+                DADOS_DESSEM[sagic_name][cur_date]['dessem_gen'][
+                    tstamp] = gen_points['values'][itstamp] / factor
+        if vol_points:
+            for itstamp, tstamp in enumerate(vol_points['timestamps']):
+                DADOS_DESSEM[sagic_name][cur_date]['dessem_vol'][
+                    tstamp] = vol_points['values'][itstamp] / factor
     return True
 
 
@@ -304,14 +310,15 @@ def process_compare_data(params):
                      next_date.date().isoformat())
         if params['query_gen']:
             for gen_type in params['dessem_sagic_name']:
-                dessem_names = params['dessem_sagic_name'][gen_type]['dessem']
-                sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
                 pparams = list()
-                for d_name, s_name in zip(dessem_names, sagic_names):
+                for d_name, item in params['dessem_sagic_name'][gen_type][
+                        'by_cepelname'].items():
+                    s_name = list(set(item['ons_sagic']))
                     if (params['compare_plants'] and
                             d_name not in params['compare_plants']):
                         continue
-                    pparams.append((params, cur_date, next_date, gen_type,
+                    pparams.append((params, cur_date, next_date,
+                                    GEN_TYPE[gen_type],
                                     d_name, s_name))
                 results = Parallel(n_jobs=10, verbose=10, backend="threading")(
                     map(delayed(query_compare_data), pparams))
@@ -321,7 +328,7 @@ def process_compare_data(params):
             pparams = list()
             for subsis in ['se', 'ne', 'n', 's']:
                 pparams.append((params, cur_date, next_date, 'cmo',
-                                subsis, 'cmo'))
+                                subsis, ['cmo']))
             results = Parallel(n_jobs=10, verbose=10, backend="threading")(
                 map(delayed(query_compare_data), pparams))
 
@@ -333,14 +340,14 @@ def process_ts_data(params):
                           until=params['end_date']):
         logging.info('Querying: cur_date: %s', cur_date.date().isoformat())
         for gen_type in params['dessem_sagic_name']:
-            dessem_names = params['dessem_sagic_name'][gen_type]['dessem']
-            sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
             pparams = list()
-            for d_name, s_name in zip(dessem_names, sagic_names):
+            for d_name, item in params['dessem_sagic_name'][gen_type][
+                    'by_cepelname'].items():
+                s_name = list(set(item['ons_sagic']))
                 if (params['compare_plants'] and
                         d_name not in params['compare_plants']):
                     continue
-                pparams.append((params, cur_date.date(), gen_type,
+                pparams.append((params, cur_date.date(), GEN_TYPE[gen_type],
                                 d_name, s_name))
             results = Parallel(n_jobs=10, verbose=10, backend="threading")(
                 map(delayed(query_complete_data), pparams))
@@ -475,18 +482,6 @@ def calculate_dessem_statistics(sagic_name, dessem_var,
         DADOS_DESSEM[sagic_name][cur_date][
             'desvio_absoluto_' + dessem_var] =\
             sqrt(abs(diff_squared)) / reservoir_volume[sagic_name]
-
-
-def build_gen_dict(params):
-    """ Constroi um dicionario com a lista de geradores e seus tipos """
-    sagic_gen_type = dict()
-    for gen_type in params['dessem_sagic_name']:
-        sagic_names = params['dessem_sagic_name'][gen_type]['sagic']
-        for s_name in sagic_names:
-            sagic_name = re.sub(r'_P$', '', s_name)
-            sagic_name = re.sub(r'[\W]+', '_', sagic_name).lower()
-            sagic_gen_type[sagic_name] = gen_type
-    return sagic_gen_type
 
 def __compare_operation(params, installed_capacity):
     """ compares operation using various metrics """
@@ -860,7 +855,6 @@ def wrapup_ts_dessem(params):
             dates[cur_date] = cur_date
             for metric in DADOS_DESSEM[sagic_name][cur_date]:
                 metrics[metric] = metric
-    # sagic_gen_type = build_gen_dict(params)
     time_series = dict()
     existing_dates = list(dates)
     existing_dates.sort()

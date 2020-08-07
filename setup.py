@@ -40,11 +40,14 @@ __public_dependencies__ = ['numpy',
                            'pytz',
                            'barrel_client',
                            'deckparser',
-                           'XlsxWriter']
+                           'XlsxWriter',
+                           'vplantnaming']
 __public_dependency_links__ = [
-    'git+https://git@bitbucket.org/venidera/' +
-    'barrel_client.git#egg=barrel_client',
-    'git+https://github.com/venidera/deckparser.git#egg=deckparser']
+    ('git+https://git@bitbucket.org/venidera/'
+    'barrel_client.git@90c2d2f3166643b49794c065f7d26b259c37cc10'
+    '#egg=barrel_client'),
+    'git+https://github.com/venidera/deckparser.git#egg=deckparser',
+    'git+https://github.com/venidera/vplantnaming.git#egg=vplantnaming']
 __private_dependencies__ = []
 
 

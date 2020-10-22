@@ -14,6 +14,9 @@ import dessemstats.compare_dessem_sagic as compare
 STORAGE_FOLDER = os.getenv('HOME') + '/tmp/edp/'
 if not os.path.exists(STORAGE_FOLDER):
     os.makedirs(STORAGE_FOLDER)
+TMP_FOLDER = '/tmp/edp/'
+if not os.path.exists(TMP_FOLDER):
+    os.makedirs(TMP_FOLDER)
 
 class TestCompare(unittest.TestCase):
     """ Teste basico de sanidade"""
@@ -39,7 +42,8 @@ class TestCompare(unittest.TestCase):
                   'normalize': True,
                   'output_xls': True,
                   'output_csv': True,
-                  'storage_folder': STORAGE_FOLDER}
+                  'storage_folder': STORAGE_FOLDER,
+                  'tmp_folder': TMP_FOLDER}
         compare.wrapup_compare(params=params)
         dados_compare = compare.DADOS_COMPARE
         self.assertIsInstance(dados_compare, dict,

@@ -173,6 +173,62 @@ def write_pld_xlsx(con, ini_datetime, end_datetime, dest_path):
     dest_file = dest_path + '/pld.xlsx'
     write_xlsx(timeseries, dest_file)
 
+def query_interchange(con, ini_datetime, end_datetime):
+    """ Query energy interchanges in between subsystems """
+    tseries = con.get_timeseries(params={
+        'name':  'ts_ons_intercambio_horario*'})
+    ts_names = list()
+    inter_data = dict()
+    for tsobj in tseries:
+        logging.debug('Retrieving Interchange points for: %s', tsobj['name'])
+        ts_names.append(tsobj['name'])
+        pts = con.get_points(oid=tsobj['tsid'], params={
+            'start': ini_datetime.isoformat(),
+            'end': end_datetime.isoformat(),
+            'tstype': 'int'})
+        for tstamp, value in zip(pts['timestamps'], pts['values']):
+            dtime = datetime.fromtimestamp(int(tstamp),
+                                           tz=LOCAL_TIMEZONE)
+            if dtime not in inter_data:
+                inter_data[dtime] = dict()
+            inter_data[dtime][tsobj['name']] = value
+    ts_names = list(set(ts_names))
+    ts_names.sort()
+    dtimes = list(inter_data)
+    dtimes.sort()
+    return inter_data, dtimes, ts_names
+
+def write_interchange_csv(con, ini_datetime, end_datetime, dest_path):
+    """ outputs interchange data do csv file """
+    logging.debug('Generating Interchange CSV file...')
+    inter_data, dtimes, ts_names = query_interchange(
+        con, ini_datetime, end_datetime)
+    for dtime in dtimes:
+        for ts_name in ts_names:
+            if ts_name not in inter_data[dtime]:
+                inter_data[dtime][
+                    ts_name] = ''
+    dest_file = dest_path + '/intercambio.csv'
+    dump_to_csv(dest_file, inter_data, ts_names, dtimes)
+
+def write_interchange_xlsx(con, ini_datetime, end_datetime, dest_path):
+    """ outputs interchange data do xlsx file """
+    logging.debug('Generating Interchange XLSX file...')
+    inter_data, dtimes, ts_names = query_interchange(
+        con, ini_datetime, end_datetime)
+    timeseries = {'intercambio': list()}
+    for dtime in dtimes:
+        cur_date_data = dict()
+        cur_date_data['Data'] = dtime.replace(tzinfo=None)
+        for ts_name in ts_names:
+            if ts_name not in inter_data[dtime]:
+                inter_data[dtime][
+                    ts_name] = ''
+            cur_date_data[ts_name] = inter_data[dtime][ts_name]
+        timeseries['intercambio'].append(cur_date_data)
+    dest_file = dest_path + '/intercambio.xlsx'
+    write_xlsx(timeseries, dest_file)
+
 def write_cmo_xlsx(data, tstamps, ts_names, params):
     """ outputs cmo data do xlsx file """
     logging.debug('Generating CMO XLSX file...')

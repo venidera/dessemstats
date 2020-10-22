@@ -8,7 +8,6 @@ Written by Marcos Leone Filho <marcos@venidera.com>
 from json import loads, dumps
 from datetime import datetime, date
 from time import mktime
-import re
 import logging
 import locale
 import statistics
@@ -24,6 +23,7 @@ from vplantnaming.naming import name_to_id
 from dessemstats.interface import load_files, connect_miran, dump_to_csv
 from dessemstats.interface import write_pld_csv, write_load_gen_csv
 from dessemstats.interface import write_pld_xlsx, write_load_gen_xlsx
+from dessemstats.interface import write_interchange_csv, write_interchange_xlsx
 from dessemstats.interface import write_xlsx, write_cmo_xlsx
 
 LOCAL_TIMEZONE = pytz.timezone('America/Sao_Paulo')
@@ -835,6 +835,10 @@ def wrapup_compare(params):
                                 params['query_load'],
                                 params['query_wind'],
                                 params['query_gen'])
+            write_interchange_xlsx(params['con'],
+                                   params['ini_date'],
+                                   params['end_date'],
+                                   params['storage_folder'])
     if params['output_csv']:
         write_csv(params)
         if params['query_pld']:
@@ -850,6 +854,10 @@ def wrapup_compare(params):
                                params['query_load'],
                                params['query_wind'],
                                params['query_gen'])
+            write_interchange_csv(params['con'],
+                                  params['ini_date'],
+                                  params['end_date'],
+                                  params['storage_folder'])
     logging.info('Finished!')
 
 
